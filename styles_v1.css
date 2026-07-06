@@ -1,0 +1,1278 @@
+/* ==========================================================================
+   Design tokens
+   ==========================================================================
+   Level 1 — primitives: raw accent hex values, light/dark variant per hue.
+   Level 2 — semantic: what the UI actually references. Everything below
+   this block should read a semantic token, never a primitive or a bare hex.
+   ========================================================================== */
+
+:root {
+  /* Level 1 — primitives */
+  --color-green-light: #3D8B37;
+  --color-green-dark: #4CAF50;
+  --color-yellow-light: #D4A017;
+  --color-yellow-dark: #F5C518;
+  --color-coral-light: #C0392B;
+  --color-coral-dark: #E8513A;
+  --color-blue-light: #1A4A6B;
+  --color-blue-dark: #2C5F8A;
+
+  /* Level 2 — semantic: light mode base values (the default) */
+  --bg-base: #F7F5F2;
+  --bg-surface: #FFFFFF;
+  --bg-elevated: #F0EDE8;
+  --border-subtle: #E8E4DF;
+  --border-default: #D4CFC9;
+  --text-primary: #1A1A1A;
+  --text-secondary: #4A4744;
+  --text-muted: #888580;
+
+  /* Status — fixed across themes, not accent-dependent */
+  --status-success: #3D8B37;
+  --status-error: #C0392B;
+  /* Not in the original spec's token list, but --status-* needs a paired
+     text colour the same way --accent does (white reads fine against both
+     of the hex values above). Added as a semantic token rather than a
+     hardcoded value in the rules that use it, to keep the "no hardcoded
+     colours outside primitives" rule intact. */
+  --status-success-text: #FFFFFF;
+  --status-error-text: #FFFFFF;
+
+  /* Accent — overridden per [data-accent] below; these are the fallback
+     (yellow, light mode) so nothing is unstyled before JS runs. */
+  --accent: var(--color-yellow-light);
+  --accent-hover: #E6B229;
+  --accent-subtle: rgba(212, 160, 23, 0.12);
+  --accent-focus: rgba(212, 160, 23, 0.35);
+  --accent-text: #1A1A1A;
+
+  /* Effects — also not in the original token list, but needed to keep the
+     "no hardcoded colours outside primitives" rule literal: the modal scrim
+     and the back-to-top button's drop shadow are both fixed black at a given
+     opacity regardless of theme/accent, so they don't need light/dark or
+     per-accent variants the way the tokens above do. */
+  --scrim: rgba(0, 0, 0, 0.6);
+  --shadow-color: rgba(0, 0, 0, 0.3);
+}
+
+/* Dark mode base values — system preference, unless a manual light choice
+   overrides it (data-theme="light" always wins over prefers-color-scheme). */
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme='light']) {
+    --bg-base: #141414;
+    --bg-surface: #1F1F1F;
+    --bg-elevated: #2A2A2A;
+    --border-subtle: #2A2A2A;
+    --border-default: #383838;
+    --text-primary: #E8E4DF;
+    --text-secondary: #B8B4AF;
+    --text-muted: #888580;
+  }
+}
+
+/* Manual override — forces dark regardless of OS preference. */
+html[data-theme='dark'] {
+  --bg-base: #141414;
+  --bg-surface: #1F1F1F;
+  --bg-elevated: #2A2A2A;
+  --border-subtle: #2A2A2A;
+  --border-default: #383838;
+  --text-primary: #E8E4DF;
+  --text-secondary: #B8B4AF;
+  --text-muted: #888580;
+}
+
+/* text-on-accent is the same concept as accent-text under a different name
+   in the spec's token list ("text on top of accent colour" vs "accessible
+   text colour on accent bg") — aliased rather than maintained twice. */
+:root {
+  --text-on-accent: var(--accent-text);
+}
+
+/* ---- Accent mapping: light mode (default) ---- */
+[data-accent='yellow'] {
+  --accent: var(--color-yellow-light);
+  --accent-hover: #E6B229;
+  --accent-subtle: rgba(212, 160, 23, 0.12);
+  --accent-focus: rgba(212, 160, 23, 0.35);
+  --accent-text: #1A1A1A;
+}
+[data-accent='green'] {
+  --accent: var(--color-green-light);
+  --accent-hover: #4F9D49;
+  --accent-subtle: rgba(61, 139, 55, 0.12);
+  --accent-focus: rgba(61, 139, 55, 0.35);
+  --accent-text: #FFFFFF;
+}
+[data-accent='coral'] {
+  --accent: var(--color-coral-light);
+  --accent-hover: #D24B3D;
+  --accent-subtle: rgba(192, 57, 43, 0.12);
+  --accent-focus: rgba(192, 57, 43, 0.35);
+  --accent-text: #FFFFFF;
+}
+[data-accent='blue'] {
+  --accent: var(--color-blue-light);
+  --accent-hover: #2C5C7D;
+  --accent-subtle: rgba(26, 74, 107, 0.12);
+  --accent-focus: rgba(26, 74, 107, 0.35);
+  --accent-text: #FFFFFF;
+}
+
+/* ---- Accent mapping: dark mode (system preference) ---- */
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme='light'])[data-accent='yellow'] {
+    --accent: var(--color-yellow-dark);
+    --accent-hover: #F7D03A;
+    --accent-subtle: rgba(245, 197, 24, 0.12);
+    --accent-focus: rgba(245, 197, 24, 0.35);
+    --accent-text: #1A1A1A;
+  }
+  html:not([data-theme='light'])[data-accent='green'] {
+    --accent: var(--color-green-dark);
+    --accent-hover: #5DC460;
+    --accent-subtle: rgba(76, 175, 80, 0.12);
+    --accent-focus: rgba(76, 175, 80, 0.35);
+    --accent-text: #FFFFFF;
+  }
+  html:not([data-theme='light'])[data-accent='coral'] {
+    --accent: var(--color-coral-dark);
+    --accent-hover: #ED6B55;
+    --accent-subtle: rgba(232, 81, 58, 0.12);
+    --accent-focus: rgba(232, 81, 58, 0.35);
+    --accent-text: #FFFFFF;
+  }
+  html:not([data-theme='light'])[data-accent='blue'] {
+    --accent: var(--color-blue-dark);
+    --accent-hover: #3A75A8;
+    --accent-subtle: rgba(44, 95, 138, 0.12);
+    --accent-focus: rgba(44, 95, 138, 0.35);
+    --accent-text: #FFFFFF;
+  }
+}
+
+/* ---- Accent mapping: dark mode (manual override) ---- */
+html[data-theme='dark'][data-accent='yellow'] {
+  --accent: var(--color-yellow-dark);
+  --accent-hover: #F7D03A;
+  --accent-subtle: rgba(245, 197, 24, 0.12);
+  --accent-focus: rgba(245, 197, 24, 0.35);
+  --accent-text: #1A1A1A;
+}
+html[data-theme='dark'][data-accent='green'] {
+  --accent: var(--color-green-dark);
+  --accent-hover: #5DC460;
+  --accent-subtle: rgba(76, 175, 80, 0.12);
+  --accent-focus: rgba(76, 175, 80, 0.35);
+  --accent-text: #FFFFFF;
+}
+html[data-theme='dark'][data-accent='coral'] {
+  --accent: var(--color-coral-dark);
+  --accent-hover: #ED6B55;
+  --accent-subtle: rgba(232, 81, 58, 0.12);
+  --accent-focus: rgba(232, 81, 58, 0.35);
+  --accent-text: #FFFFFF;
+}
+html[data-theme='dark'][data-accent='blue'] {
+  --accent: var(--color-blue-dark);
+  --accent-hover: #3A75A8;
+  --accent-subtle: rgba(44, 95, 138, 0.12);
+  --accent-focus: rgba(44, 95, 138, 0.35);
+  --accent-text: #FFFFFF;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 400px;
+  max-height: 580px;
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: 'DM Sans', sans-serif;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+body {
+  position: relative;
+}
+
+.app {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.header-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.wordmark {
+  font-family: 'Playfair Display', serif;
+  font-weight: 700;
+  font-size: 22px;
+  margin: 0;
+  color: var(--text-primary);
+}
+
+.clip-count {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin: 2px 0 0;
+  font-family: 'DM Sans', sans-serif;
+}
+
+.welcome-subline {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin: 2px 0 0;
+  font-family: 'DM Sans', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.icon-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  line-height: 1;
+}
+.icon-btn:hover {
+  color: var(--text-primary);
+}
+
+.app-nav {
+  display: flex;
+  gap: 16px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border-subtle);
+  font-family: 'DM Sans', sans-serif;
+}
+.nav-link {
+  color: var(--text-muted);
+  text-decoration: none;
+  padding-bottom: 4px;
+}
+.nav-link:hover {
+  color: var(--accent);
+}
+.nav-current {
+  color: var(--accent);
+  border-bottom: 2px solid var(--accent);
+  padding-bottom: 4px;
+}
+
+.clip-view,
+.history-view {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
+}
+
+.welcome-screen {
+  display: none;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 12px;
+}
+.welcome-screen:not([hidden]) {
+  display: flex;
+}
+.welcome-headline {
+  font-family: 'Playfair Display', serif;
+  font-weight: 700;
+  font-size: 18px;
+  margin: 0;
+  color: var(--text-primary);
+}
+.welcome-body {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.title-input {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  padding: 8px;
+}
+.title-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-focus);
+}
+.title-input.invalid {
+  border-color: var(--status-error);
+}
+.title-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.wand-btn {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  color: var(--text-muted);
+  font-size: 15px;
+  cursor: not-allowed;
+}
+.wand-btn.active {
+  color: var(--accent);
+  border-color: var(--accent);
+  cursor: pointer;
+}
+.wand-btn.active:hover {
+  background: var(--accent-subtle);
+}
+.wand-btn.spinner {
+  position: relative;
+  color: transparent;
+  cursor: wait;
+}
+.wand-btn.spinner::after {
+  content: '';
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--accent);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: fwiwSpin 600ms linear infinite;
+}
+
+.clip-textarea {
+  width: 100%;
+  min-height: 120px;
+  resize: vertical;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  padding: 8px;
+}
+.clip-edit-textarea {
+  min-height: 80px;
+}
+
+.clip-textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+/*
+ * Without this, placeholder text falls back to the browser's hardcoded
+ * default grey instead of our own --text-muted, which is illegible against
+ * some accent/background combinations (e.g. Ocean blue).
+ */
+.clip-textarea::placeholder,
+.tag-input::placeholder,
+.tag-input-text::placeholder,
+.search-input::placeholder,
+.cred-input::placeholder {
+  color: var(--text-muted);
+  opacity: 1;
+}
+
+.source-url {
+  font-size: 11px;
+  color: var(--text-muted);
+  word-break: break-all;
+  min-height: 14px;
+}
+
+.tag-input,
+.filter-select,
+.search-input {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  padding: 8px;
+}
+.tag-input {
+  width: 100%;
+}
+.tag-input:focus,
+.search-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-focus);
+}
+
+/* Tag-chip widget: committed tags render as removable pills, with a plain
+   text input flowing in the same wrapped row for typing the next one. */
+.tag-input-field {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+.tag-input-field:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-focus);
+}
+.tag-input-pills {
+  display: contents;
+}
+.tag-input-text {
+  flex: 1;
+  min-width: 60px;
+  background: none;
+  border: none;
+  outline: none;
+  color: var(--text-primary);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  padding: 2px;
+}
+.tag-pill-removable {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.tag-pill-remove {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 0;
+}
+.tag-pill-remove:hover {
+  color: var(--status-error);
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: var(--accent-text);
+  border: none;
+  border-radius: 4px;
+  padding: 8px 12px;
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background-color 120ms ease, transform 120ms ease;
+}
+.btn-primary:hover {
+  background: var(--accent-hover);
+}
+.btn-primary.pulse {
+  transform: scale(1.04);
+}
+
+.btn-secondary {
+  background: transparent;
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  padding: 8px 12px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  cursor: pointer;
+}
+.btn-secondary:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.saved-confirm {
+  font-size: 11px;
+  color: var(--text-muted);
+  opacity: 0;
+  transition: opacity 300ms ease;
+  margin: 0;
+  height: 14px;
+}
+.saved-confirm.visible {
+  opacity: 1;
+}
+
+.search-input {
+  width: 100%;
+}
+
+.filter-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.filter-select {
+  flex: 1;
+  min-width: 80px;
+}
+
+.tag-filter {
+  position: relative;
+  flex: 1;
+  min-width: 80px;
+}
+.tag-filter-trigger {
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tag-filter-menu {
+  display: none;
+  flex-direction: column;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 4px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  z-index: 10;
+  padding: 4px;
+  gap: 2px;
+}
+.tag-filter-menu:not([hidden]) {
+  display: flex;
+}
+.tag-filter-clear {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  text-align: left;
+  padding: 6px 8px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: 2px;
+}
+.tag-filter-clear:hover {
+  color: var(--accent-hover);
+}
+.tag-filter-options {
+  display: flex;
+  flex-direction: column;
+  max-height: 160px;
+  overflow-y: auto;
+}
+.tag-filter-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  font-size: 13px;
+  color: var(--text-primary);
+  font-family: 'DM Sans', sans-serif;
+  cursor: pointer;
+  border-radius: 4px;
+}
+.tag-filter-option:hover {
+  background: var(--bg-surface);
+}
+.tag-filter-option input[type='checkbox'] {
+  accent-color: var(--accent);
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+}
+
+.clip-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.clip-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  transition: opacity 200ms ease;
+}
+.clip-card.fade-out {
+  opacity: 0;
+}
+
+.clip-title {
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.clip-meta {
+  display: flex;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-muted);
+  align-items: center;
+  flex-wrap: wrap;
+  font-family: 'DM Sans', sans-serif;
+}
+.clip-url {
+  color: var(--accent);
+  text-decoration: none;
+}
+.clip-url:hover {
+  color: var(--accent-hover);
+  text-decoration: underline;
+}
+
+.tag-row {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.tag-pill {
+  background: var(--accent-subtle);
+  color: var(--accent);
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  animation: fwiwFadeIn 150ms ease;
+  font-family: 'DM Sans', sans-serif;
+}
+
+.sent-badges {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.sent-badge {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--border-subtle);
+  color: var(--text-muted);
+  font-family: 'DM Sans', sans-serif;
+}
+
+@keyframes fwiwFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.clip-text {
+  font-size: 13px;
+  margin: 0;
+  cursor: pointer;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: pre-wrap;
+}
+.clip-text.expanded {
+  -webkit-line-clamp: unset;
+  overflow: visible;
+}
+
+.clip-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.edit-btn,
+.delete-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 2px 4px;
+  font-family: 'DM Sans', sans-serif;
+}
+.edit-btn:hover {
+  color: var(--accent);
+}
+.delete-btn:hover {
+  color: var(--status-error);
+}
+
+.empty-state {
+  font-family: 'DM Sans', sans-serif;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 24px 8px;
+  font-size: 13px;
+}
+
+.actions-row {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 8px;
+  margin-bottom: 8px;
+}
+
+.back-to-top-btn {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--border-default);
+  background: var(--bg-surface);
+  color: var(--accent);
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  box-shadow: 0 2px 6px var(--shadow-color);
+}
+.back-to-top-btn:hover {
+  background: var(--accent-subtle);
+}
+
+.export-row {
+  position: relative;
+}
+.export-panel {
+  display: none;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+  min-width: 220px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  padding: 12px;
+}
+.export-panel:not([hidden]) {
+  display: flex;
+}
+.export-panel .settings-label {
+  margin: 8px 0 0;
+}
+.export-panel .settings-label:first-child {
+  margin-top: 0;
+}
+.export-panel .btn-primary {
+  margin-top: 8px;
+}
+
+.radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.radio-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-primary);
+  font-family: 'DM Sans', sans-serif;
+  cursor: pointer;
+}
+.radio-option input[type='radio'] {
+  accent-color: var(--accent);
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+}
+
+.send-all-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.send-all-progress {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin: 0;
+  font-family: 'DM Sans', sans-serif;
+}
+
+.send-to-wrap {
+  position: relative;
+  display: inline-flex;
+}
+.send-to-btn {
+  background: var(--accent-subtle);
+  color: var(--accent);
+  border: none;
+  border-radius: 4px;
+  font-size: 11px;
+  padding: 4px 8px;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  min-width: 64px;
+  text-align: center;
+}
+.send-to-btn:hover {
+  background: var(--accent-focus);
+}
+.send-to-btn.exhausted {
+  background: var(--border-subtle);
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+.send-to-btn.exhausted:hover {
+  background: var(--border-subtle);
+}
+
+.unsend-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 2px 4px;
+  font-family: 'DM Sans', sans-serif;
+}
+.unsend-btn:hover {
+  color: var(--accent);
+}
+.send-to-btn.spinner {
+  position: relative;
+  color: transparent;
+}
+.send-to-btn.spinner::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+  border: 2px solid var(--accent);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: fwiwSpin 600ms linear infinite;
+}
+
+@keyframes fwiwSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.send-to-menu {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  margin-bottom: 4px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  display: none;
+  flex-direction: column;
+  overflow: hidden;
+  z-index: 10;
+  min-width: 150px;
+}
+.send-to-menu:not([hidden]) {
+  display: flex;
+}
+.send-to-menu button {
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  padding: 8px 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.send-to-menu button:hover {
+  background: var(--bg-surface);
+  color: var(--accent);
+}
+
+.clip-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.send-status {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: 'DM Sans', sans-serif;
+}
+/*
+ * Filled badges instead of coloured text: plain green/red text can lose
+ * contrast against whichever surface colour is active, so success/failure
+ * get their own fixed, always-legible background + text pairing instead of
+ * inheriting theme colours.
+ */
+.send-status.success,
+.send-status.failed {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 700;
+}
+.send-status.success {
+  background: var(--status-success);
+  color: var(--status-success-text);
+}
+.send-status.failed {
+  background: var(--status-error);
+  color: var(--status-error-text);
+}
+.send-status-link {
+  color: var(--status-error-text);
+  text-decoration: underline;
+  cursor: pointer;
+  margin-left: 4px;
+}
+
+/*
+ * position:absolute (not fixed) so this overlay's content counts toward the
+ * body's natural scroll height. Chrome sizes/scrolls the popup based on
+ * normal-flow layout; fixed-position content used to get silently clipped
+ * whenever an expanded section made the panel taller than the popup window.
+ */
+.settings-overlay {
+  position: absolute;
+  inset: 0;
+  background: var(--scrim);
+  display: none;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 24px 0;
+  overflow-y: auto;
+  z-index: 100;
+}
+.settings-overlay:not([hidden]) {
+  display: flex;
+}
+.settings-panel {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  padding: 16px;
+  width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.settings-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.settings-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 16px;
+  margin: 0;
+}
+.settings-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin: 8px 0 0;
+  font-family: 'DM Sans', sans-serif;
+}
+.swatches {
+  display: flex;
+  gap: 8px;
+}
+.swatch {
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+}
+.swatch.active {
+  border-color: var(--text-primary);
+}
+
+.segmented-control {
+  display: flex;
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.segmented-control button {
+  flex: 1;
+  background: var(--bg-surface);
+  border: none;
+  color: var(--text-muted);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  padding: 8px;
+  cursor: pointer;
+}
+.segmented-control button + button {
+  border-left: 1px solid var(--border-subtle);
+}
+.segmented-control button:hover {
+  color: var(--text-primary);
+}
+.segmented-control button.active {
+  background: var(--accent-subtle);
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.connector-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.connector-section {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.connector-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 700;
+  font-size: 13px;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+.connector-header:hover {
+  color: var(--accent);
+}
+.connector-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.connector-chevron {
+  color: var(--text-muted);
+  transition: transform 150ms ease;
+}
+.connector-header.open .connector-chevron {
+  transform: rotate(90deg);
+}
+
+.connector-badge {
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 400;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  background: var(--bg-base);
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+.connector-section.coming-soon .connector-header {
+  color: var(--text-muted);
+}
+.connector-section.coming-soon .connector-header:hover {
+  color: var(--text-muted);
+}
+.coming-soon-text {
+  padding-top: 4px;
+}
+
+.connector-body {
+  display: none;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 12px 12px;
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 12px;
+}
+.connector-body:not([hidden]) {
+  display: flex;
+}
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  color: var(--text-primary);
+  font-family: 'DM Sans', sans-serif;
+  cursor: pointer;
+}
+
+.toggle-switch {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 32px;
+  height: 18px;
+  border-radius: 9px;
+  background: var(--border-default);
+  position: relative;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background-color 150ms ease;
+}
+.toggle-switch::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--text-primary);
+  transition: transform 150ms ease;
+}
+.toggle-switch:checked {
+  background: var(--accent);
+}
+.toggle-switch:checked::before {
+  transform: translateX(14px);
+  background: var(--accent-text);
+}
+
+.instructions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.instructions-title {
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--text-primary);
+  margin: 0;
+}
+.instructions-text {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin: 0;
+  line-height: 1.5;
+  font-family: 'DM Sans', sans-serif;
+}
+.instructions-steps {
+  margin: 4px 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.instructions-steps li {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  font-family: 'DM Sans', sans-serif;
+}
+.instructions-steps li::marker {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.cred-input {
+  width: 100%;
+  background: var(--bg-base);
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  padding: 8px;
+}
+.cred-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-focus);
+}
+
+.connector-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.connection-status {
+  font-size: 11px;
+  font-family: 'DM Sans', sans-serif;
+  display: inline-flex;
+  align-items: center;
+}
+/* Same fixed-contrast filled badge treatment as .send-status — see note there. */
+.connection-status.connected,
+.connection-status.failed {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 700;
+}
+.connection-status.connected {
+  background: var(--status-success);
+  color: var(--status-success-text);
+}
+.connection-status.failed {
+  background: var(--status-error);
+  color: var(--status-error-text);
+}
+
+.connection-status-reason {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: 'DM Sans', sans-serif;
+  margin: 0;
+  line-height: 1.5;
+}

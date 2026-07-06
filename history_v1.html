@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>FWIW — History</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="app-header">
+      <div class="header-top">
+        <h1 class="wordmark">FWIW</h1>
+        <button class="icon-btn" id="settingsBtn" aria-label="Settings" title="Settings">&#9881;</button>
+      </div>
+      <p class="clip-count" id="clipCount">0 saves</p>
+    </header>
+
+    <nav class="app-nav">
+      <a href="popup.html" class="nav-link">Saves</a>
+      <span class="nav-current">History</span>
+    </nav>
+
+    <main class="history-view">
+      <input type="search" id="searchInput" class="search-input" placeholder="Search your saves..." />
+
+      <div class="filter-row">
+        <div class="tag-filter" id="tagFilterWrap">
+          <button type="button" class="filter-select tag-filter-trigger" id="tagFilterTrigger">All tags</button>
+          <div class="tag-filter-menu" id="tagFilterMenu" hidden>
+            <button type="button" class="tag-filter-clear" id="tagFilterClear" hidden>Clear tags</button>
+            <div class="tag-filter-options" id="tagFilterOptions"></div>
+          </div>
+        </div>
+        <select id="timeRangeFilter" class="filter-select">
+          <option value="all">All time</option>
+          <option value="today">Today</option>
+          <option value="week">This week</option>
+          <option value="month">This month</option>
+          <option value="year">This year</option>
+        </select>
+      </div>
+
+      <div class="actions-row">
+        <div class="export-row">
+          <button class="btn-primary" id="exportToggleBtn" type="button">Export...</button>
+          <div class="export-panel" id="exportPanel" hidden>
+            <p class="settings-label">Format</p>
+            <div class="radio-group">
+              <label class="radio-option"><input type="radio" name="exportFormat" value="json" checked /> JSON</label>
+              <label class="radio-option"><input type="radio" name="exportFormat" value="csv" /> CSV</label>
+              <label class="radio-option"><input type="radio" name="exportFormat" value="markdown" /> Markdown</label>
+            </div>
+            <p class="settings-label">Scope</p>
+            <div class="radio-group">
+              <label class="radio-option"><input type="radio" name="exportScope" value="all" checked /> All clips</label>
+              <label class="radio-option"><input type="radio" name="exportScope" value="view" /> Current view</label>
+              <label class="radio-option"><input type="radio" name="exportScope" value="today" /> Today's clips</label>
+              <label class="radio-option"><input type="radio" name="exportScope" value="week" /> This week's clips</label>
+              <label class="radio-option"><input type="radio" name="exportScope" value="month" /> This month's clips</label>
+            </div>
+            <button class="btn-primary" id="exportConfirmBtn" type="button">Export</button>
+          </div>
+        </div>
+
+        <div class="send-all-row" id="sendAllRow" hidden>
+          <button class="btn-primary" id="sendAllToggleBtn" type="button">Send all to...</button>
+          <div class="send-to-menu" id="sendAllMenu" hidden></div>
+          <p class="send-all-progress" id="sendAllProgress" hidden></p>
+        </div>
+      </div>
+
+      <div class="clip-list" id="clipList"></div>
+      <p class="empty-state" id="emptyState" hidden></p>
+    </main>
+  </div>
+
+  <button type="button" id="backToTopBtn" class="back-to-top-btn" aria-label="Back to top" title="Back to top" hidden>&#8593;</button>
+
+  <div class="settings-overlay" id="settingsOverlay" hidden>
+    <div class="settings-panel">
+      <div class="settings-header">
+        <h2 class="settings-title">Settings</h2>
+        <button class="btn-secondary" id="closeSettingsBtn" type="button">Save changes</button>
+      </div>
+      <p class="settings-label">Accent colour</p>
+      <div class="swatches" id="swatches"></div>
+
+      <p class="settings-label">Appearance</p>
+      <div class="segmented-control" id="themeToggle"></div>
+
+      <p class="settings-label">On save</p>
+      <label class="toggle-row">
+        <span>Auto-send to enabled connectors</span>
+        <input type="checkbox" class="toggle-switch" id="autoSendToggle" />
+      </label>
+
+      <p class="settings-label">Connectors</p>
+      <div class="connector-sections" id="connectorSections"></div>
+    </div>
+  </div>
+
+  <script src="settings.js"></script>
+  <script src="connectors.js"></script>
+  <script src="tag-input.js"></script>
+  <script src="history.js"></script>
+</body>
+</html>

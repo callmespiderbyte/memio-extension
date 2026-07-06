@@ -1,0 +1,2273 @@
+/* ==========================================================================
+   Design tokens
+   ==========================================================================
+   Level 1 — primitives: raw accent hex values, light/dark variant per hue.
+   Level 2 — semantic: what the UI actually references. Everything below
+   this block should read a semantic token, never a primitive or a bare hex.
+   ========================================================================== */
+
+/*
+ * Anchored to :host, not :root — this stylesheet is injected into a shadow
+ * root attached to an element in an arbitrary host page, not a standalone
+ * document. :root inside a shadow-DOM stylesheet still means the outer
+ * page's <html>, which we don't control and which won't have any of these
+ * variables defined; :host means "the shadow host element itself," which is
+ * the correct scoping boundary here.
+ */
+:host {
+  /* Level 1 — primitives */
+  --color-green-light: #3D8B37;
+  --color-green-dark: #4CAF50;
+  --color-yellow-light: #D4A017;
+  --color-yellow-dark: #F5C518;
+  --color-coral-light: #C0392B;
+  --color-coral-dark: #E8513A;
+  --color-blue-light: #1A4A6B;
+  --color-blue-dark: #2C5F8A;
+  --color-violet-light: #6025C7;
+  --color-violet-dark: #7C3AED;
+  --color-gum-light: #D42E6A;
+  --color-gum-dark: #E8407A;
+
+  /* Level 2 — semantic: light mode base values (the default) */
+  --bg-base: #F7F5F2;
+  --bg-surface: #FFFFFF;
+  --bg-elevated: #F0EDE8;
+  --border-subtle: #E8E4DF;
+  --border-default: #D4CFC9;
+  --text-primary: #1A1A1A;
+  --text-secondary: #4A4744;
+  --text-muted: #888580;
+
+  /* Status — fixed across themes, not accent-dependent */
+  --status-success: #3D8B37;
+  --status-error: #C0392B;
+  /* Not in the original spec's token list, but --status-* needs a paired
+     text colour the same way --accent does (white reads fine against both
+     of the hex values above). Added as a semantic token rather than a
+     hardcoded value in the rules that use it, to keep the "no hardcoded
+     colours outside primitives" rule intact. */
+  --status-success-text: #FFFFFF;
+  --status-error-text: #FFFFFF;
+  /* Used for the little on/off dot on each connector header. Defaults to
+     --status-success (green), but when the accent itself is green that dot
+     would blend into an all-green settings panel, so it's overridden below
+     for [data-accent='green'] specifically. */
+  --status-active: var(--status-success);
+
+  /* Accent — overridden per [data-accent] below; these are the fallback
+     (yellow, light mode) so nothing is unstyled before JS runs. */
+  --accent: var(--color-yellow-light);
+  --accent-hover: #E6B229;
+  --accent-subtle: rgba(212, 160, 23, 0.12);
+  --accent-focus: rgba(212, 160, 23, 0.35);
+  --accent-text: #1A1A1A;
+
+  /* Effects — also not in the original token list, but needed to keep the
+     "no hardcoded colours outside primitives" rule literal: the modal scrim
+     and the back-to-top button's drop shadow are both fixed black at a given
+     opacity regardless of theme/accent, so they don't need light/dark or
+     per-accent variants the way the tokens above do. */
+  --scrim: rgba(0, 0, 0, 0.6);
+  --shadow-color: rgba(0, 0, 0, 0.3);
+}
+
+/* Dark mode base values — system preference, unless a manual light choice
+   overrides it (data-theme="light" always wins over prefers-color-scheme). */
+@media (prefers-color-scheme: dark) {
+  :host(:not([data-theme='light'])) {
+    --bg-base: #141414;
+    --bg-surface: #1F1F1F;
+    --bg-elevated: #2A2A2A;
+    --border-subtle: #2A2A2A;
+    --border-default: #383838;
+    --text-primary: #E8E4DF;
+    --text-secondary: #B8B4AF;
+    --text-muted: #888580;
+  }
+}
+
+/* Manual override — forces dark regardless of OS preference. */
+:host([data-theme='dark']) {
+  --bg-base: #141414;
+  --bg-surface: #1F1F1F;
+  --bg-elevated: #2A2A2A;
+  --border-subtle: #2A2A2A;
+  --border-default: #383838;
+  --text-primary: #E8E4DF;
+  --text-secondary: #B8B4AF;
+  --text-muted: #888580;
+}
+
+/* text-on-accent is the same concept as accent-text under a different name
+   in the spec's token list ("text on top of accent colour" vs "accessible
+   text colour on accent bg") — aliased rather than maintained twice. */
+:host {
+  --text-on-accent: var(--accent-text);
+}
+
+/* ---- Accent mapping: light mode (default) ---- */
+:host([data-accent='yellow']) {
+  --accent: var(--color-yellow-light);
+  --accent-hover: #E6B229;
+  --accent-subtle: rgba(212, 160, 23, 0.12);
+  --accent-focus: rgba(212, 160, 23, 0.35);
+  --accent-text: #1A1A1A;
+}
+:host([data-accent='green']) {
+  --accent: var(--color-green-light);
+  --accent-hover: #4F9D49;
+  --accent-subtle: rgba(61, 139, 55, 0.12);
+  --accent-focus: rgba(61, 139, 55, 0.35);
+  --accent-text: #FFFFFF;
+  /* Doesn't depend on light/dark, only on which accent is selected, so this
+     one rule covers it regardless of theme. */
+  --status-active: #8B5CF6;
+}
+:host([data-accent='coral']) {
+  --accent: var(--color-coral-light);
+  --accent-hover: #D24B3D;
+  --accent-subtle: rgba(192, 57, 43, 0.12);
+  --accent-focus: rgba(192, 57, 43, 0.35);
+  --accent-text: #FFFFFF;
+}
+:host([data-accent='blue']) {
+  --accent: var(--color-blue-light);
+  --accent-hover: #2C5C7D;
+  --accent-subtle: rgba(26, 74, 107, 0.12);
+  --accent-focus: rgba(26, 74, 107, 0.35);
+  --accent-text: #FFFFFF;
+}
+:host([data-accent='violet']) {
+  --accent: var(--color-violet-light);
+  --accent-hover: #9B6AF5;
+  --accent-subtle: rgba(124, 58, 237, 0.12);
+  --accent-focus: rgba(124, 58, 237, 0.35);
+  --accent-text: #FFFFFF;
+}
+:host([data-accent='gum']) {
+  --accent: var(--color-gum-light);
+  --accent-hover: #EF5E91;
+  --accent-subtle: rgba(232, 64, 122, 0.12);
+  --accent-focus: rgba(232, 64, 122, 0.35);
+  --accent-text: #FFFFFF;
+}
+
+/* ---- Accent mapping: dark mode (system preference) ---- */
+@media (prefers-color-scheme: dark) {
+  :host(:not([data-theme='light'])[data-accent='yellow']) {
+    --accent: var(--color-yellow-dark);
+    --accent-hover: #F7D03A;
+    --accent-subtle: rgba(245, 197, 24, 0.12);
+    --accent-focus: rgba(245, 197, 24, 0.35);
+    --accent-text: #1A1A1A;
+  }
+  :host(:not([data-theme='light'])[data-accent='green']) {
+    --accent: var(--color-green-dark);
+    --accent-hover: #5DC460;
+    --accent-subtle: rgba(76, 175, 80, 0.12);
+    --accent-focus: rgba(76, 175, 80, 0.35);
+    --accent-text: #FFFFFF;
+  }
+  :host(:not([data-theme='light'])[data-accent='coral']) {
+    --accent: var(--color-coral-dark);
+    --accent-hover: #ED6B55;
+    --accent-subtle: rgba(232, 81, 58, 0.12);
+    --accent-focus: rgba(232, 81, 58, 0.35);
+    --accent-text: #FFFFFF;
+  }
+  :host(:not([data-theme='light'])[data-accent='blue']) {
+    --accent: var(--color-blue-dark);
+    --accent-hover: #3A75A8;
+    --accent-subtle: rgba(44, 95, 138, 0.12);
+    --accent-focus: rgba(44, 95, 138, 0.35);
+    --accent-text: #FFFFFF;
+  }
+  :host(:not([data-theme='light'])[data-accent='violet']) {
+    --accent: var(--color-violet-dark);
+    --accent-hover: #9B6AF5;
+    --accent-subtle: rgba(124, 58, 237, 0.12);
+    --accent-focus: rgba(124, 58, 237, 0.35);
+    --accent-text: #FFFFFF;
+  }
+  :host(:not([data-theme='light'])[data-accent='gum']) {
+    --accent: var(--color-gum-dark);
+    --accent-hover: #EF5E91;
+    --accent-subtle: rgba(232, 64, 122, 0.12);
+    --accent-focus: rgba(232, 64, 122, 0.35);
+    --accent-text: #FFFFFF;
+  }
+}
+
+/* ---- Accent mapping: dark mode (manual override) ---- */
+:host([data-theme='dark'][data-accent='yellow']) {
+  --accent: var(--color-yellow-dark);
+  --accent-hover: #F7D03A;
+  --accent-subtle: rgba(245, 197, 24, 0.12);
+  --accent-focus: rgba(245, 197, 24, 0.35);
+  --accent-text: #1A1A1A;
+}
+:host([data-theme='dark'][data-accent='green']) {
+  --accent: var(--color-green-dark);
+  --accent-hover: #5DC460;
+  --accent-subtle: rgba(76, 175, 80, 0.12);
+  --accent-focus: rgba(76, 175, 80, 0.35);
+  --accent-text: #FFFFFF;
+}
+:host([data-theme='dark'][data-accent='coral']) {
+  --accent: var(--color-coral-dark);
+  --accent-hover: #ED6B55;
+  --accent-subtle: rgba(232, 81, 58, 0.12);
+  --accent-focus: rgba(232, 81, 58, 0.35);
+  --accent-text: #FFFFFF;
+}
+:host([data-theme='dark'][data-accent='blue']) {
+  --accent: var(--color-blue-dark);
+  --accent-hover: #3A75A8;
+  --accent-subtle: rgba(44, 95, 138, 0.12);
+  --accent-focus: rgba(44, 95, 138, 0.35);
+  --accent-text: #FFFFFF;
+}
+:host([data-theme='dark'][data-accent='violet']) {
+  --accent: var(--color-violet-dark);
+  --accent-hover: #9B6AF5;
+  --accent-subtle: rgba(124, 58, 237, 0.12);
+  --accent-focus: rgba(124, 58, 237, 0.35);
+  --accent-text: #FFFFFF;
+}
+:host([data-theme='dark'][data-accent='gum']) {
+  --accent: var(--color-gum-dark);
+  --accent-hover: #EF5E91;
+  --accent-subtle: rgba(232, 64, 122, 0.12);
+  --accent-focus: rgba(232, 64, 122, 0.35);
+  --accent-text: #FFFFFF;
+}
+
+/* ==========================================================================
+   Background colour mode — "Colour applies to: Background" in Theme
+   settings. The chosen accent becomes the page background instead of just
+   the accent colour. --bg-base is set per-accent below (using the same
+   light/dark-variant cascade as the normal accent mapping, since a raw
+   var(--accent) reference here would fight with --accent being reassigned
+   to a neutral value further down — a self-created circularity). Everything
+   else (surface/border tints, neutral foreground) derives from --bg-base
+   via colour-mix(), so there's no per-accent hand-tuning needed beyond the
+   base hue itself.
+   ========================================================================== */
+:host([data-color-mode='background'][data-accent='yellow']) { --bg-base: var(--color-yellow-light); }
+:host([data-color-mode='background'][data-accent='green'])  { --bg-base: var(--color-green-light); }
+:host([data-color-mode='background'][data-accent='coral'])  { --bg-base: var(--color-coral-light); }
+:host([data-color-mode='background'][data-accent='blue'])   { --bg-base: var(--color-blue-light); }
+:host([data-color-mode='background'][data-accent='violet'])      { --bg-base: var(--color-violet-light); }
+:host([data-color-mode='background'][data-accent='gum']) { --bg-base: var(--color-gum-light); }
+
+@media (prefers-color-scheme: dark) {
+  :host(:not([data-theme='light'])[data-color-mode='background'][data-accent='yellow']) { --bg-base: var(--color-yellow-dark); }
+  :host(:not([data-theme='light'])[data-color-mode='background'][data-accent='green'])  { --bg-base: var(--color-green-dark); }
+  :host(:not([data-theme='light'])[data-color-mode='background'][data-accent='coral'])  { --bg-base: var(--color-coral-dark); }
+  :host(:not([data-theme='light'])[data-color-mode='background'][data-accent='blue'])   { --bg-base: var(--color-blue-dark); }
+  :host(:not([data-theme='light'])[data-color-mode='background'][data-accent='violet'])      { --bg-base: var(--color-violet-dark); }
+  :host(:not([data-theme='light'])[data-color-mode='background'][data-accent='gum']) { --bg-base: var(--color-gum-dark); }
+}
+
+:host([data-theme='dark'][data-color-mode='background'][data-accent='yellow']) { --bg-base: var(--color-yellow-dark); }
+:host([data-theme='dark'][data-color-mode='background'][data-accent='green'])  { --bg-base: var(--color-green-dark); }
+:host([data-theme='dark'][data-color-mode='background'][data-accent='coral'])  { --bg-base: var(--color-coral-dark); }
+:host([data-theme='dark'][data-color-mode='background'][data-accent='blue'])   { --bg-base: var(--color-blue-dark); }
+:host([data-theme='dark'][data-color-mode='background'][data-accent='violet'])      { --bg-base: var(--color-violet-dark); }
+:host([data-theme='dark'][data-color-mode='background'][data-accent='gum']) { --bg-base: var(--color-gum-dark); }
+
+/* Default foreground: light-on-colour (covers system + explicit "Light"). */
+:host([data-color-mode='background']) {
+  --text-primary: #F5F3EF;
+  --text-secondary: rgba(245, 243, 239, 0.75);
+  --text-muted: rgba(245, 243, 239, 0.6);
+  --bg-surface: color-mix(in srgb, var(--bg-base) 85%, white);
+  --bg-elevated: color-mix(in srgb, var(--bg-base) 75%, white);
+  --border-subtle: color-mix(in srgb, var(--bg-base) 85%, white);
+  --border-default: color-mix(in srgb, var(--bg-base) 65%, white);
+  --accent: #F5F3EF;
+  --accent-hover: rgba(245, 243, 239, 0.85);
+  --accent-subtle: rgba(245, 243, 239, 0.12);
+  --accent-focus: rgba(245, 243, 239, 0.35);
+  --accent-text: #141414;
+}
+
+/* "Dark" appearance in background mode means dark-on-colour, per how this
+   toggle worked before — not the usual light-text-on-dark-bg association. */
+:host([data-theme='dark'][data-color-mode='background']) {
+  --text-primary: #141414;
+  --text-secondary: rgba(20, 20, 20, 0.75);
+  --text-muted: rgba(20, 20, 20, 0.6);
+  --bg-surface: color-mix(in srgb, var(--bg-base) 85%, black);
+  --bg-elevated: color-mix(in srgb, var(--bg-base) 75%, black);
+  --border-subtle: color-mix(in srgb, var(--bg-base) 85%, black);
+  --border-default: color-mix(in srgb, var(--bg-base) 65%, black);
+  --accent: #141414;
+  --accent-hover: rgba(20, 20, 20, 0.85);
+  --accent-subtle: rgba(20, 20, 20, 0.12);
+  --accent-focus: rgba(20, 20, 20, 0.35);
+  --accent-text: #F5F3EF;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+:host {
+  all: initial;
+  font-family: 'DM Sans', sans-serif;
+}
+/*
+ * `all: initial` above resets `display` too (to its initial value, `inline`)
+ * — and since this is an author-origin rule, it beats the browser's default
+ * `[hidden] { display: none }` user-agent rule outright, regardless of
+ * specificity or whether `hidden` is even present. That silently defeated
+ * hostEl.hidden entirely: the close button was toggling the attribute
+ * correctly the whole time, it just had zero visual effect. !important here
+ * is deliberately overriding our own reset for this one state, not a
+ * shortcut around something else.
+ */
+:host([hidden]) {
+  display: none !important;
+}
+
+/*
+ * Floating window shell — replaces the old fixed-size popup body. Injected
+ * into the host page and positioned via JS-managed left/top (dragging) or
+ * the default bottom-right via CSS below.
+ */
+.memio-window {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  width: 440px;
+  min-width: 320px;
+  max-width: 480px;
+  height: 660px;
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: 'DM Sans', sans-serif;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.24);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  z-index: 2147483647;
+}
+
+.window-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+  cursor: grab;
+  flex-shrink: 0;
+}
+.window-header.grabbing {
+  cursor: grabbing;
+}
+.header-left {
+  display: flex;
+  flex-direction: column;
+}
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.header-subline {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin: 2px 0 0;
+  font-family: 'DM Sans', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.nav-tab {
+  flex: 1;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  text-align: center;
+  padding: 8px 16px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+.nav-tab:hover {
+  color: var(--text-primary);
+}
+.nav-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.window-content {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/*
+ * display:none by default + :not([hidden]) override — not `display: flex`
+ * unconditionally. A plain class selector and the browser's default
+ * [hidden] { display: none } rule have equal specificity, and the author
+ * stylesheet wins ties, so an unconditional `display: flex` here would
+ * silently defeat `hidden` entirely (this exact bug has bitten this
+ * project before: settings overlay, export menu, connector body, welcome
+ * screen — same root cause each time).
+ */
+.empty-state-block {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 32px 8px;
+}
+.empty-state-block:not([hidden]) {
+  display: flex;
+}
+.empty-illustration {
+  width: 96px;
+  height: 64px;
+  color: var(--text-muted);
+}
+
+.wordmark {
+  font-family: 'Playfair Display', serif;
+  font-weight: 700;
+  font-size: 20px;
+  margin: 0;
+  color: var(--text-primary);
+}
+
+.clip-count {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 2px 0 0;
+}
+.clip-count-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: 'DM Sans', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.clip-count-number {
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 700;
+  font-size: 11px;
+  color: var(--accent-text);
+  background: var(--accent);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.welcome-subline {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin: 2px 0 0;
+  font-family: 'DM Sans', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  line-height: 1;
+}
+.icon-btn:hover {
+  color: var(--text-primary);
+}
+.icon-btn-large {
+  font-size: 20px;
+}
+.icon-btn-small {
+  font-size: 13px;
+}
+
+.app-nav {
+  display: flex;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.nav-link {
+  color: var(--text-muted);
+  text-decoration: none;
+  padding-bottom: 4px;
+}
+.nav-link:hover {
+  color: var(--accent);
+}
+.nav-current {
+  color: var(--accent);
+  border-bottom: 2px solid var(--accent);
+  padding-bottom: 4px;
+}
+
+.clip-view,
+.history-view {
+  display: none;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
+}
+.clip-view:not([hidden]),
+.history-view:not([hidden]) {
+  display: flex;
+}
+
+.title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.title-input {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  padding: 8px;
+}
+.title-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-focus);
+}
+.title-input.invalid {
+  border-color: var(--status-error);
+}
+.title-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.wand-btn {
+  position: relative;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  color: var(--text-muted);
+  font-size: 16px;
+  cursor: not-allowed;
+}
+.wand-btn::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  /* Right-anchored, not centred: this button sits near the right edge of
+     the title row, so a centred tooltip would grow past the window's right
+     edge and get clipped/unreadable. Anchoring to the button's right edge
+     and growing left keeps it inside the window instead. */
+  right: 0;
+  left: auto;
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 11px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+  z-index: 20;
+}
+.wand-btn:hover::after {
+  opacity: 1;
+}
+.wand-btn.active {
+  color: var(--accent);
+  border-color: var(--accent);
+  cursor: pointer;
+}
+.wand-btn.active:hover {
+  background: var(--accent-subtle);
+}
+.wand-btn.spinner {
+  position: relative;
+  color: transparent;
+  cursor: wait;
+}
+.wand-btn.spinner::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 12px;
+  height: 12px;
+  margin: -6px 0 0 -6px;
+  border: 2px solid var(--accent);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: memioSpin 600ms linear infinite;
+}
+
+.clip-textarea {
+  width: 100%;
+  min-height: 120px;
+  resize: vertical;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  padding: 8px;
+}
+.clip-edit-textarea {
+  min-height: 80px;
+}
+
+.clip-textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+/*
+ * Without this, placeholder text falls back to the browser's hardcoded
+ * default grey instead of our own --text-muted, which is illegible against
+ * some accent/background combinations (e.g. Ocean blue).
+ */
+.clip-textarea::placeholder,
+.tag-input::placeholder,
+.tag-input-text::placeholder,
+.search-input::placeholder,
+.cred-input::placeholder {
+  color: var(--text-muted);
+  opacity: 1;
+}
+
+.source-url {
+  font-size: 11px;
+  color: var(--text-muted);
+  word-break: break-all;
+  min-height: 14px;
+}
+
+.tag-input,
+.filter-select,
+.search-input {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  padding: 8px;
+}
+.tag-input {
+  width: 100%;
+}
+.tag-input:focus,
+.search-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-focus);
+}
+
+/* Tag-chip widget: committed tags render as removable pills, with a plain
+   text input flowing in the same wrapped row for typing the next one. */
+.tag-input-field {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+.tag-input-field:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-focus);
+}
+.tag-input-pills {
+  display: contents;
+}
+.tag-input-text {
+  flex: 1;
+  min-width: 60px;
+  background: none;
+  border: none;
+  outline: none;
+  color: var(--text-primary);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  padding: 2px;
+}
+.tag-pill-removable {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.tag-pill-remove {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 0;
+}
+.tag-pill-remove:hover {
+  color: var(--status-error);
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: var(--accent-text);
+  border: none;
+  border-radius: 4px;
+  padding: 8px 12px;
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background-color 120ms ease, transform 120ms ease;
+}
+.btn-primary:hover {
+  background: var(--accent-hover);
+}
+.btn-primary.pulse {
+  transform: scale(1.04);
+}
+/* .btn-primary is also used on <a> tags (Donate, Email feedback) — anchors
+   default to display:inline with an underline, neither of which reads as a
+   button. */
+a.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  text-decoration: none;
+}
+
+.btn-secondary {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  padding: 8px 12px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  cursor: pointer;
+}
+.btn-secondary:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.saved-confirm {
+  font-size: 11px;
+  color: var(--text-muted);
+  opacity: 0;
+  transition: opacity 300ms ease;
+  margin: 0;
+  height: 14px;
+}
+.saved-confirm.visible {
+  opacity: 1;
+}
+
+.search-input {
+  width: 100%;
+}
+
+.filter-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.filter-select {
+  flex: 1;
+  min-width: 80px;
+}
+
+.tag-filter {
+  position: relative;
+  flex: 1;
+  min-width: 80px;
+}
+.tag-filter-trigger {
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tag-filter-menu {
+  display: none;
+  flex-direction: column;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 4px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  z-index: 10;
+  padding: 4px;
+  gap: 2px;
+}
+.tag-filter-menu:not([hidden]) {
+  display: flex;
+}
+.tag-filter-clear {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  text-align: left;
+  padding: 6px 8px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: 2px;
+}
+.tag-filter-clear:hover {
+  color: var(--accent-hover);
+}
+.tag-filter-options {
+  display: flex;
+  flex-direction: column;
+  max-height: 160px;
+  overflow-y: auto;
+}
+.tag-filter-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  font-size: 13px;
+  color: var(--text-primary);
+  font-family: 'DM Sans', sans-serif;
+  cursor: pointer;
+  border-radius: 4px;
+}
+.tag-filter-option:hover {
+  background: var(--bg-surface);
+}
+.tag-filter-option input[type='checkbox'] {
+  accent-color: var(--accent);
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+}
+
+.clip-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.clip-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  transition: opacity 200ms ease;
+}
+.clip-card.fade-out {
+  opacity: 0;
+}
+
+.clip-title {
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.clip-meta {
+  display: flex;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-muted);
+  align-items: center;
+  flex-wrap: wrap;
+  font-family: 'DM Sans', sans-serif;
+}
+.clip-url {
+  color: var(--accent);
+  text-decoration: none;
+}
+.clip-url:hover {
+  color: var(--accent-hover);
+  text-decoration: underline;
+}
+
+.tag-row {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.tag-pill {
+  background: var(--accent-subtle);
+  color: var(--accent);
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  animation: memioFadeIn 150ms ease;
+  font-family: 'DM Sans', sans-serif;
+}
+
+.sent-badges {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.sent-badge {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--border-subtle);
+  color: var(--text-muted);
+  font-family: 'DM Sans', sans-serif;
+}
+
+@keyframes memioFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.clip-text {
+  font-size: 13px;
+  margin: 0;
+  cursor: pointer;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: pre-wrap;
+}
+.clip-text.expanded {
+  -webkit-line-clamp: unset;
+  overflow: visible;
+}
+
+.clip-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.edit-btn,
+.delete-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 2px 4px;
+  font-family: 'DM Sans', sans-serif;
+}
+.edit-btn:hover {
+  color: var(--accent);
+}
+.delete-btn:hover {
+  color: var(--status-error);
+}
+
+.empty-state {
+  font-family: 'DM Sans', sans-serif;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 24px 8px;
+  font-size: 13px;
+}
+.empty-state-tip {
+  font-family: 'DM Sans', sans-serif;
+  color: var(--text-muted);
+  text-align: center;
+  font-style: italic;
+  font-size: 12px;
+  margin: 0 8px;
+}
+.empty-state-block .empty-state {
+  padding-bottom: 0;
+}
+
+.actions-row {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 8px;
+  margin-bottom: 8px;
+}
+
+.back-to-top-btn {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--border-default);
+  background: var(--bg-surface);
+  color: var(--accent);
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  box-shadow: 0 2px 6px var(--shadow-color);
+}
+.back-to-top-btn:hover {
+  background: var(--accent-subtle);
+}
+
+.export-row {
+  position: relative;
+}
+.export-panel {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  display: none;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 220px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  padding: 12px;
+  z-index: 20;
+}
+.export-panel:not([hidden]) {
+  display: flex;
+}
+.export-panel .settings-label {
+  margin: 8px 0 0;
+}
+.export-panel .settings-label:first-child {
+  margin-top: 0;
+}
+.export-panel .btn-primary {
+  margin-top: 8px;
+}
+
+.radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.radio-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-primary);
+  font-family: 'DM Sans', sans-serif;
+  cursor: pointer;
+}
+.radio-option input[type='radio'] {
+  accent-color: var(--accent);
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+}
+
+.send-all-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.send-all-progress {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin: 0;
+  font-family: 'DM Sans', sans-serif;
+}
+
+.send-to-wrap {
+  position: relative;
+  display: inline-flex;
+}
+.send-to-btn {
+  background: var(--accent-subtle);
+  color: var(--accent);
+  border: none;
+  border-radius: 4px;
+  font-size: 11px;
+  padding: 4px 8px;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  min-width: 64px;
+  text-align: center;
+}
+.send-to-btn:hover {
+  background: var(--accent-focus);
+}
+.send-to-btn.exhausted {
+  background: var(--border-subtle);
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+.send-to-btn.exhausted:hover {
+  background: var(--border-subtle);
+}
+
+.unsend-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 2px 4px;
+  font-family: 'DM Sans', sans-serif;
+}
+.unsend-btn:hover {
+  color: var(--accent);
+}
+.send-to-btn.spinner {
+  position: relative;
+  color: transparent;
+}
+.send-to-btn.spinner::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+  border: 2px solid var(--accent);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: memioSpin 600ms linear infinite;
+}
+
+@keyframes memioSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.send-to-menu {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  margin-bottom: 4px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  display: none;
+  flex-direction: column;
+  overflow: hidden;
+  z-index: 10;
+  min-width: 150px;
+}
+.send-to-menu:not([hidden]) {
+  display: flex;
+}
+.send-to-menu button {
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  padding: 8px 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.send-to-menu button:hover {
+  background: var(--bg-surface);
+  color: var(--accent);
+}
+
+.clip-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.send-status {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: 'DM Sans', sans-serif;
+}
+/*
+ * Filled badges instead of coloured text: plain green/red text can lose
+ * contrast against whichever surface colour is active, so success/failure
+ * get their own fixed, always-legible background + text pairing instead of
+ * inheriting theme colours.
+ */
+.send-status.success,
+.send-status.failed {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 700;
+}
+.send-status.success {
+  background: var(--status-success);
+  color: var(--status-success-text);
+}
+.send-status.failed {
+  background: var(--status-error);
+  color: var(--status-error-text);
+}
+.send-status-link {
+  color: var(--status-error-text);
+  text-decoration: underline;
+  cursor: pointer;
+  margin-left: 4px;
+}
+
+/*
+ * Nested inside .memio-window (which is position:fixed, establishing a
+ * containing block), so position:absolute + inset:0 covers just the
+ * floating window itself, not the whole host page. overflow-y:auto lets it
+ * scroll internally since the window is a fixed 560px height, not an
+ * auto-growing popup.
+ */
+.settings-overlay {
+  position: absolute;
+  inset: 0;
+  background: var(--scrim);
+  display: none;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 24px 0;
+  overflow-y: auto;
+  z-index: 100;
+}
+.settings-overlay:not([hidden]) {
+  display: flex;
+}
+.settings-panel {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  padding: 16px;
+  width: 380px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.settings-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.settings-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 16px;
+  margin: 0;
+}
+
+/*
+ * Help panel — same .settings-overlay/.settings-panel shell as Donate and
+ * the old Suggestions modal, just with a constrained height so the FAQ
+ * region scrolls internally while the feedback footer stays put instead of
+ * scrolling away with a growing panel.
+ */
+.help-panel {
+  max-height: 520px;
+  overflow: hidden;
+}
+.help-panel .settings-title {
+  font-size: 20px;
+  color: var(--text-primary);
+}
+.help-faq-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+}
+.help-feedback-footer {
+  flex-shrink: 0;
+  margin: 0 -16px -16px;
+  padding: 16px;
+  border-top: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.help-feedback-text {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0;
+}
+/* Anchors default to display:inline, which ignores width:100% — same fix
+   as a.btn-primary above, needed here because this is an <a>, not a <button>. */
+.help-feedback-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  text-decoration: none;
+}
+
+/* Outline style — same bordered-box treatment as a connector row (e.g.
+   Obsidian) in Settings → Connectors, rather than a plain flush label. */
+.help-section {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.help-section-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 700;
+  font-size: 13px;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+.help-section-header:hover {
+  color: var(--accent);
+}
+.help-section-header .connector-chevron {
+  transition: transform 150ms ease;
+}
+.help-section-header.open .connector-chevron {
+  transform: rotate(90deg);
+}
+.help-section-body {
+  display: none;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 12px 12px;
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 4px;
+}
+.help-section-body:not([hidden]) {
+  display: flex;
+}
+
+.help-question {
+  border-top: 1px solid var(--border-subtle);
+}
+.help-question-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 500;
+  font-size: 13px;
+  text-align: left;
+  padding: 8px 0;
+  cursor: pointer;
+}
+.help-question-header .connector-chevron {
+  transition: transform 150ms ease;
+  flex-shrink: 0;
+}
+.help-question-header.open .connector-chevron {
+  transform: rotate(90deg);
+}
+.help-question-body {
+  display: none;
+}
+.help-question-body:not([hidden]) {
+  display: block;
+}
+.help-answer-text {
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 400;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin: 0;
+  padding: 8px 0 12px;
+}
+.help-answer-blocks {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 0 12px;
+}
+.help-answer-block-label {
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 500;
+  font-size: 13px;
+  color: var(--text-primary);
+  margin: 0;
+}
+.help-answer-block-text {
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 400;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin: 2px 0 0;
+}
+.help-answer-note {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 4px 0 0;
+}
+
+.settings-nav {
+  display: flex;
+  gap: 16px;
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: 4px;
+}
+.settings-nav .nav-tab {
+  flex: none;
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 400;
+  font-size: 11px;
+  text-align: left;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 6px 0;
+}
+
+.settings-section {
+  display: none;
+  flex-direction: column;
+  gap: 8px;
+}
+.settings-section:not([hidden]) {
+  display: flex;
+}
+.settings-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin: 8px 0 0;
+  font-family: 'DM Sans', sans-serif;
+}
+
+.settings-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 12px;
+}
+.settings-group .settings-label {
+  margin-top: 0;
+}
+.configure-empty-state {
+  text-align: center;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  color: var(--text-muted);
+  padding: 24px 8px;
+  line-height: 1.6;
+}
+.swatches {
+  display: flex;
+  gap: 8px;
+}
+.swatch-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.swatch {
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+}
+.swatch.active {
+  border-color: var(--text-primary);
+}
+.swatch-label {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 10px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.segmented-control {
+  display: flex;
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.segmented-control button {
+  flex: 1;
+  background: var(--bg-surface);
+  border: none;
+  color: var(--text-muted);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  padding: 8px;
+  cursor: pointer;
+}
+.segmented-control button + button {
+  border-left: 1px solid var(--border-subtle);
+}
+.segmented-control button:hover {
+  color: var(--text-primary);
+}
+.segmented-control button.active {
+  background: var(--accent-subtle);
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.connector-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.connector-section {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.connector-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 700;
+  font-size: 13px;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+.connector-header:hover {
+  color: var(--accent);
+}
+.connector-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.connector-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--text-muted);
+}
+.connector-status-dot[data-active='true'] {
+  background: var(--status-active);
+}
+
+.connector-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.connector-chevron {
+  color: var(--text-muted);
+  transition: transform 150ms ease;
+}
+.connector-header.open .connector-chevron {
+  transform: rotate(90deg);
+}
+.connector-header-static {
+  cursor: default;
+}
+.connector-header-static:hover {
+  color: var(--text-primary);
+}
+
+.connector-badge {
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 400;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  background: var(--bg-base);
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+.connector-section.coming-soon .connector-header {
+  color: var(--text-muted);
+}
+.connector-section.coming-soon .connector-header:hover {
+  color: var(--text-muted);
+}
+.coming-soon-text {
+  padding-top: 4px;
+}
+
+.connector-body {
+  display: none;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 12px 12px;
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 12px;
+}
+.connector-body:not([hidden]) {
+  display: flex;
+}
+
+/* Level-2 nested collapsibles inside each connector row (CONFIGURE / FOLDERS
+   & PAGES-DATABASES / AUTO-ROUTING RULES) — same chevron/open pattern as the
+   level-1 connector header, indented and de-emphasised so the hierarchy reads
+   clearly. */
+.connector-subsection {
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+}
+.connector-subheader {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 700;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+.connector-subheader:hover {
+  color: var(--accent);
+}
+.connector-subheader .connector-chevron {
+  color: var(--text-muted);
+  transition: transform 150ms ease;
+}
+.connector-subheader.open .connector-chevron {
+  transform: rotate(90deg);
+}
+.connector-subbody {
+  display: none;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 10px 10px;
+}
+.connector-subbody:not([hidden]) {
+  display: flex;
+}
+
+/* FOLDERS / PAGES & DATABASES destination list. */
+.destination-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.destination-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: var(--bg-elevated);
+  border-radius: 4px;
+  cursor: grab;
+}
+.destination-drag-handle {
+  color: var(--text-muted);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+.destination-label {
+  flex: 1;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.destination-default-pill {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--accent-text);
+  background: var(--accent);
+  border-radius: 4px;
+  padding: 1px 6px;
+  flex-shrink: 0;
+}
+.destination-remove {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 2px;
+  flex-shrink: 0;
+}
+.destination-remove:hover {
+  color: var(--status-error);
+}
+.add-destination-link {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+}
+.add-destination-link:hover {
+  color: var(--accent-hover);
+}
+.add-destination-link:disabled {
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+.add-destination-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* AUTO-ROUTING RULES rule builder. */
+.tag-rule-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.tag-rule-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.tag-rule-tag-input {
+  flex: 1;
+  min-width: 0;
+}
+.tag-rule-arrow {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+.tag-rule-select {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Send-destination popover — appears above the "Send to..." button inside
+   the same .send-to-wrap that already positions the plain connector-name
+   menu, following the same position:absolute + bottom:100% pattern. */
+.send-destination-popover {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  margin-bottom: 4px;
+  width: 280px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  padding: 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.send-popover-message {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0;
+  line-height: 1.5;
+}
+.send-popover-message a {
+  color: var(--accent);
+}
+.send-popover-confirm {
+  width: 100%;
+  height: 36px;
+}
+.send-popover-cancel {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0;
+  align-self: center;
+}
+.send-popover-cancel:hover {
+  color: var(--text-primary);
+}
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  font-family: 'DM Sans', sans-serif;
+  cursor: pointer;
+}
+.settings-helper-text {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  font-style: italic;
+  color: var(--text-muted);
+  margin: 2px 0 0;
+}
+
+.toggle-switch {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 32px;
+  height: 18px;
+  border-radius: 9px;
+  background: var(--border-default);
+  position: relative;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background-color 150ms ease;
+}
+.toggle-switch::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--text-primary);
+  transition: transform 150ms ease;
+}
+.toggle-switch:checked {
+  background: var(--accent);
+}
+.toggle-switch:checked::before {
+  transform: translateX(14px);
+  background: var(--accent-text);
+}
+
+.instructions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.instructions-title {
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--text-primary);
+  margin: 0;
+}
+.instructions-text {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin: 0;
+  line-height: 1.5;
+  font-family: 'DM Sans', sans-serif;
+}
+.instructions-steps {
+  margin: 4px 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.instructions-steps li {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  font-family: 'DM Sans', sans-serif;
+}
+.instructions-steps li::marker {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.cred-input {
+  width: 100%;
+  background: var(--bg-base);
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  padding: 8px;
+}
+.cred-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-focus);
+}
+
+.connector-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.connector-actions .btn-secondary {
+  flex-shrink: 0;
+}
+
+.connection-status {
+  font-size: 11px;
+  font-family: 'DM Sans', sans-serif;
+  display: inline-flex;
+  align-items: center;
+}
+/* Same fixed-contrast filled badge treatment as .send-status — see note there. */
+.connection-status.connected,
+.connection-status.failed {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 700;
+}
+.connection-status.connected {
+  background: var(--status-success);
+  color: var(--status-success-text);
+}
+.connection-status.failed {
+  background: var(--status-error);
+  color: var(--status-error-text);
+}
+
+.connection-status-reason {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: 'DM Sans', sans-serif;
+  margin: 0;
+  line-height: 1.5;
+}
+
+/*
+ * First-launch onboarding tour. Nested inside .memio-window (position:fixed,
+ * same containing-block trick used by .settings-overlay), and layered above
+ * the app itself with plain sibling z-index — .memio-tour-active gives the
+ * spotlighted element its own position+z-index so it paints above the dim
+ * overlay despite being a normal window-content descendant.
+ */
+.tour-welcome-overlay {
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--bg-base) 95%, transparent);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 400;
+}
+.tour-welcome-overlay:not([hidden]) {
+  display: flex;
+}
+.tour-welcome-modal {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: 12px;
+  padding: 28px;
+  max-width: 320px;
+  display: flex;
+  flex-direction: column;
+}
+.tour-welcome-headline {
+  font-family: 'Playfair Display', serif;
+  font-size: 22px;
+  color: var(--text-primary);
+  margin: 0;
+}
+.tour-welcome-body {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin: 10px 0 0;
+}
+.tour-welcome-subline {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 8px 0 0;
+}
+.tour-welcome-cta {
+  width: 100%;
+  height: 40px;
+  font-weight: 500;
+  margin-top: 16px;
+}
+.tour-skip-link {
+  background: none;
+  border: none;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0;
+}
+.tour-skip-link:hover {
+  color: var(--text-primary);
+}
+.tour-welcome-modal .tour-skip-link {
+  margin-top: 10px;
+  align-self: center;
+}
+
+.tour-spotlight-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 300;
+  pointer-events: none;
+}
+.memio-tour-active {
+  position: relative;
+  z-index: 301;
+}
+.tour-save-highlight {
+  transform: scale(1.04);
+}
+.memio-tour-border {
+  box-shadow: 0 0 0 2px var(--accent);
+  border-radius: 4px;
+}
+
+.tour-tooltip {
+  position: absolute;
+  z-index: 302;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  padding: 14px 16px;
+  max-width: 260px;
+  font-family: 'DM Sans', sans-serif;
+  display: none;
+  flex-direction: column;
+}
+.tour-tooltip:not([hidden]) {
+  display: flex;
+}
+.tour-tooltip::before {
+  content: '';
+  position: absolute;
+  left: 20px;
+  width: 0;
+  height: 0;
+  border: 6px solid transparent;
+}
+.tour-tooltip-below::before {
+  top: -12px;
+  border-bottom-color: var(--bg-elevated);
+}
+.tour-tooltip-above::before {
+  bottom: -12px;
+  border-top-color: var(--bg-elevated);
+}
+.tour-tooltip-headline {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--text-primary);
+  margin: 0;
+}
+.tour-tooltip-body {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 6px 0 0;
+  line-height: 1.5;
+}
+.tour-tooltip-tip {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 6px 0 0;
+  line-height: 1.4;
+}
+.tour-progress-dots {
+  display: flex;
+  gap: 6px;
+  margin-top: 12px;
+}
+.tour-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--border-default);
+}
+.tour-dot.active {
+  width: 8px;
+  height: 8px;
+  background: var(--accent);
+}
+.tour-tooltip-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+}
+.tour-next-btn {
+  padding: 6px 12px;
+}
+
+/*
+ * Milestone celebration overlay — same containing-block trick as the tour,
+ * full-window, auto-dismisses itself (see fireMilestone() in content.js).
+ */
+.milestone-overlay {
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--bg-base) 96%, transparent);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 500;
+  text-align: center;
+}
+.milestone-overlay:not([hidden]) {
+  display: flex;
+}
+.milestone-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0 24px;
+}
+.milestone-number {
+  font-family: 'Playfair Display', serif;
+  font-size: 72px;
+  color: var(--accent);
+  margin: 0;
+  opacity: 0;
+}
+.milestone-number.milestone-pop {
+  animation: memioMilestonePop 300ms ease forwards;
+}
+@keyframes memioMilestonePop {
+  from {
+    transform: scale(0.8);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+.milestone-copy {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 16px;
+  color: var(--text-primary);
+  margin: 12px 0 0;
+}
+.milestone-subline {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 8px 0 0;
+}
+
+/* Settings nudge banner — muted inline callout, dismissable forever. */
+.settings-banner {
+  display: none;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  padding: 10px 14px;
+}
+.settings-banner:not([hidden]) {
+  display: flex;
+}
+.settings-banner-text {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 0;
+  line-height: 1.5;
+}
+.settings-banner-gear {
+  cursor: pointer;
+  text-decoration: none;
+}
+.settings-banner-close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+}
+.settings-banner-close:hover {
+  color: var(--text-primary);
+}

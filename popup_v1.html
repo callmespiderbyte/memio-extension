@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>FWIW</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="app-header">
+      <div class="header-top">
+        <h1 class="wordmark">FWIW</h1>
+        <button class="icon-btn" id="settingsBtn" aria-label="Settings" title="Settings">&#9881;</button>
+      </div>
+      <p class="welcome-subline" id="welcomeSubline" hidden>FOR WHAT IT'S WORTH</p>
+      <p class="clip-count" id="clipCount">0 saves</p>
+    </header>
+
+    <nav class="app-nav">
+      <span class="nav-current">Saves</span>
+      <a href="history.html" class="nav-link">History</a>
+    </nav>
+
+    <div class="welcome-screen" id="welcomeScreen" hidden>
+      <p class="welcome-headline">Your ideas are worth saving.</p>
+      <p class="welcome-body">
+        FWIW is a personal knowledge tool that lives in your browser. Clip anything. Tag it. Find it later. Send it straight to Obsidian, Notion, or Google Drive.
+      </p>
+    </div>
+
+    <main class="clip-view">
+      <div class="title-row">
+        <input type="text" id="clipTitle" class="title-input" placeholder="Title" />
+        <button type="button" id="generateTitleBtn" class="wand-btn" aria-label="Generate title with AI" title="">&#10022;</button>
+      </div>
+      <p class="title-hint" id="titleHint" hidden>Add a title to save</p>
+      <p class="title-hint" id="wandError" hidden></p>
+      <textarea id="clipText" class="clip-textarea" placeholder="Type or paste something worth keeping..."></textarea>
+      <div class="source-url" id="sourceUrl"></div>
+      <div id="tagInputField" class="tag-input"></div>
+      <button class="btn-primary" id="saveBtn" type="button">Save it</button>
+      <p class="saved-confirm" id="savedConfirm">Saved.</p>
+    </main>
+  </div>
+
+  <div class="settings-overlay" id="settingsOverlay" hidden>
+    <div class="settings-panel">
+      <div class="settings-header">
+        <h2 class="settings-title">Settings</h2>
+        <button class="btn-secondary" id="closeSettingsBtn" type="button">Save changes</button>
+      </div>
+      <p class="settings-label">Accent colour</p>
+      <div class="swatches" id="swatches"></div>
+
+      <p class="settings-label">Appearance</p>
+      <div class="segmented-control" id="themeToggle"></div>
+
+      <p class="settings-label">On save</p>
+      <label class="toggle-row">
+        <span>Auto-send to enabled connectors</span>
+        <input type="checkbox" class="toggle-switch" id="autoSendToggle" />
+      </label>
+
+      <p class="settings-label">Connectors</p>
+      <div class="connector-sections" id="connectorSections"></div>
+    </div>
+  </div>
+
+  <script src="settings.js"></script>
+  <script src="connectors.js"></script>
+  <script src="tag-input.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
