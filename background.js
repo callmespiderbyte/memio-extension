@@ -2,14 +2,17 @@ const MEMIO_CONTENT_FILES = ['settings.js', 'connectors.js', 'tag-input.js', 'co
 
 // One-time migration from the extension's old "fwiw" naming — copies any
 // existing data under the old storage keys to the new "memio" keys, so
-// renaming the product doesn't orphan clips/settings someone already saved.
+// renaming the product doesn't orphan memos/settings someone already saved.
+// The "fwiw_clips"/"fwiw_draft" literals here name a fixed historical key
+// that will never change, regardless of later "clip" → "memo" terminology
+// renames — do not rename these strings alongside such renames.
 async function migrateLegacyFwiwStorage() {
   const legacy = await chrome.storage.sync.get(['fwiw_clips', 'fwiw_settings']);
-  const current = await chrome.storage.sync.get(['memio_clips', 'memio_settings']);
+  const current = await chrome.storage.sync.get(['memio_memos', 'memio_settings']);
   const patch = {};
 
-  if (legacy.fwiw_clips && !current.memio_clips) {
-    patch.memio_clips = legacy.fwiw_clips;
+  if (legacy.fwiw_clips && !current.memio_memos) {
+    patch.memio_memos = legacy.fwiw_clips;
   }
   if (legacy.fwiw_settings && !current.memio_settings) {
     patch.memio_settings = legacy.fwiw_settings;
@@ -26,8 +29,21 @@ async function migrateLegacyFwiwStorage() {
   }
 }
 
+// One-time migration from "clips" to "memos" terminology — copies any
+// existing data under the old memio_clips key (used between the Memio
+// rename and this terminology change) to memio_memos.
+async function migrateClipsToMemos() {
+  const legacy = await chrome.storage.sync.get('memio_clips');
+  const current = await chrome.storage.sync.get('memio_memos');
+  if (legacy.memio_clips && !current.memio_memos) {
+    await chrome.storage.sync.set({ memio_memos: legacy.memio_clips });
+    await chrome.storage.sync.remove('memio_clips');
+  }
+}
+
 chrome.runtime.onInstalled.addListener(async () => {
   await migrateLegacyFwiwStorage();
+  await migrateClipsToMemos();
 
   const { memio_settings } = await chrome.storage.sync.get('memio_settings');
   if (!memio_settings) {
@@ -36,9 +52,9 @@ chrome.runtime.onInstalled.addListener(async () => {
     });
   }
 
-  const { memio_clips } = await chrome.storage.sync.get('memio_clips');
-  if (!memio_clips) {
-    await chrome.storage.sync.set({ memio_clips: [] });
+  const { memio_memos } = await chrome.storage.sync.get('memio_memos');
+  if (!memio_memos) {
+    await chrome.storage.sync.set({ memio_memos: [] });
   }
 
   const { connectors } = await chrome.storage.sync.get('connectors');
@@ -61,12 +77,12 @@ chrome.runtime.onInstalled.addListener(async () => {
 chrome.runtime.onStartup.addListener(updateBadge);
 
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === 'sync' && changes.memio_clips) updateBadge();
+  if (area === 'sync' && changes.memio_memos) updateBadge();
 });
 
 async function updateBadge() {
-  const { memio_clips } = await chrome.storage.sync.get('memio_clips');
-  const count = (memio_clips || []).length;
+  const { memio_memos } = await chrome.storage.sync.get('memio_memos');
+  const count = (memio_memos || []).length;
   await chrome.action.setBadgeText({ text: count > 0 ? String(count) : '' });
   await chrome.action.setBadgeBackgroundColor({ color: '#888580' });
 }

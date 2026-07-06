@@ -1,7 +1,7 @@
 // Shared tag-chip input: typing a tag then hitting Enter or comma commits it
 // as a removable pill, so it's visually clear the tag has been captured
 // rather than sitting as ungrouped text in a plain field. Used by both the
-// Clip view (popup.js) and the History edit form (history.js).
+// Memo view (popup.js) and the History edit form (history.js).
 function memioCreateTagInput(wrapperEl, initialTags, onChange) {
   const tags = (initialTags || []).slice();
 

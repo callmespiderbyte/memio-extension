@@ -48,16 +48,16 @@ const MEMIO_CONNECTOR_DEFS = [
       'In the plugin settings, turn on "Enable Non-encrypted (HTTP) Server" — it\'s off by default',
       'In the plugin settings, copy your API Key (paste just the key — no "Bearer " prefix)',
       'Paste it below',
-      'Make sure Obsidian is open when sending clips'
+      'Make sure Obsidian is open when sending memos'
     ],
     fields: [{ key: 'apiKey', type: 'password', placeholder: 'API key' }],
     destinationsKey: 'folders',
     destinationsLabel: 'FOLDERS',
     destinationsSubline: 'The first folder is your default. Add more to choose a destination when sending.',
     addLabel: '+ Add folder',
-    addPlaceholder: '/clips/design',
+    addPlaceholder: '/memos/design',
     routingSubline:
-      "Route clips to a folder based on a single tag. If a clip has multiple tags, the first matching rule wins — so if 'design' routes to /design and 'book' routes to /book, a clip tagged both goes to /design. Unmatched clips go to your default folder.",
+      "Route memos to a folder based on a single tag. If a memo has multiple tags, the first matching rule wins — so if 'design' routes to /design and 'book' routes to /book, a memo tagged both goes to /design. Unmatched memos go to your default folder.",
     routingDefaultLabel: 'your default folder'
   },
   {
@@ -70,7 +70,7 @@ const MEMIO_CONNECTOR_DEFS = [
       'Click "New integration" → give it a name → Submit',
       'Copy the "Internal Integration Token"',
       'Paste it below',
-      'Open or create a Notion page or database where clips will be saved.',
+      'Open or create a Notion page or database where memos will be saved.',
       'Click the "..." menu top right → Connections → select your integration',
       'Add it under Pages & Databases below, using its Page or Database ID from the URL: notion.so/Your-Page-{THIS-IS-THE-ID}',
       'Paste it below'
@@ -82,7 +82,7 @@ const MEMIO_CONNECTOR_DEFS = [
     addLabel: '+ Add page or database',
     addPlaceholder: 'Paste Page or Database ID',
     routingSubline:
-      "Route clips to a folder based on a single tag. If a clip has multiple tags, the first matching rule wins — so if 'design' routes to /design and 'book' routes to /book, a clip tagged both goes to /design. Unmatched clips go to your default folder.",
+      "Route memos to a folder based on a single tag. If a memo has multiple tags, the first matching rule wins — so if 'design' routes to /design and 'book' routes to /book, a memo tagged both goes to /design. Unmatched memos go to your default folder.",
     routingDefaultLabel: 'your default page'
   },
   {
@@ -208,16 +208,16 @@ function memioPadNum(n) {
   return String(n).padStart(2, '0');
 }
 
-// Prefers the clip's own (human- or AI-authored) title — never a raw
-// content excerpt. Falls back to a date/time stamp only for older clips
+// Prefers the memo's own (human- or AI-authored) title — never a raw
+// content excerpt. Falls back to a date/time stamp only for older memos
 // saved before the title field existed. `context.scopeLabel`, when present
-// (bulk sends only), notes which filters were active so a batch of clips
+// (bulk sends only), notes which filters were active so a batch of memos
 // stays distinguishable from each other.
-function memioBuildSendTitle(clip, context) {
-  const d = new Date(clip.createdAt);
+function memioBuildSendTitle(memo, context) {
+  const d = new Date(memo.createdAt);
   const datePart = `${d.getFullYear()}-${memioPadNum(d.getMonth() + 1)}-${memioPadNum(d.getDate())}`;
   const timePart = `${memioPadNum(d.getHours())}-${memioPadNum(d.getMinutes())}`;
-  const base = clip.title || `${datePart} ${timePart}`;
+  const base = memo.title || `${datePart} ${timePart}`;
   const scopeLabel = context && context.scopeLabel;
   return scopeLabel ? `${base} — ${scopeLabel}` : base;
 }
@@ -243,8 +243,8 @@ function memioSlugifyForFilename(text) {
 }
 
 // ---------------------------------------------------------------------
-// Collation — grouping clips into a shared daily/weekly/monthly note
-// instead of one file/page per clip.
+// Collation — grouping memos into a shared daily/weekly/monthly note
+// instead of one file/page per memo.
 // ---------------------------------------------------------------------
 const MEMIO_MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const MEMIO_MONTH_FULL = [
@@ -275,9 +275,9 @@ function memioGetWeekBounds(date) {
 
 // Human-readable period title — always this exact deterministic string,
 // regardless of AI: it doubles as the Notion page title we search/create
-// by, so it can never vary between clips in the same period.
-function memioGetFallbackPeriodTitle(period, clip) {
-  const d = new Date(clip.createdAt);
+// by, so it can never vary between memos in the same period.
+function memioGetFallbackPeriodTitle(period, memo) {
+  const d = new Date(memo.createdAt);
   if (period === 'daily') {
     return `${d.getDate()} ${MEMIO_MONTH_SHORT[d.getMonth()]} ${d.getFullYear()}`;
   }
@@ -299,8 +299,8 @@ function memioPadDate(d) {
 
 // Obsidian's filename is always this deterministic date string — never
 // AI-varied — so the same file is reliably found again on every append.
-function memioGetObsidianCollationFilename(period, clip) {
-  const d = new Date(clip.createdAt);
+function memioGetObsidianCollationFilename(period, memo) {
+  const d = new Date(memo.createdAt);
   if (period === 'daily') {
     return `${memioPadDate(d)}.md`;
   }
@@ -317,13 +317,13 @@ function memioGetObsidianCollationFilename(period, clip) {
 // Optional AI-generated H1 heading for a newly-created collated Obsidian
 // note. Returns null (no H1 at all) when AI isn't enabled/keyed, or if
 // generation fails for any reason — the note still gets written either way.
-async function memioGetAiCollationHeading(period, clip) {
+async function memioGetAiCollationHeading(period, memo) {
   const connectors = await memioGetConnectors();
   const ai = connectors.ai;
   if (!ai || !ai.enabled || !ai.apiKey) return null;
   try {
     const generate = MEMIO_AI_GENERATORS[ai.provider] || MEMIO_AI_GENERATORS.claude;
-    const fallback = memioGetFallbackPeriodTitle(period, clip);
+    const fallback = memioGetFallbackPeriodTitle(period, memo);
     const prompt =
       `Generate a short, natural title (maximum 6 words) for a ${period} note covering ${fallback}. ` +
       'Return only the title, no punctuation, no quotes, nothing else.';
@@ -349,23 +349,23 @@ function memioFormatReadableTimestamp(iso) {
 }
 
 // Shared by both collation appends and same-title individual-mode appends
-// (see memioSendToObsidian) — one clip's worth of content as a markdown H2
+// (see memioSendToObsidian) — one memo's worth of content as a markdown H2
 // section, matching the exact field order/labels FIX 2 specifies.
-function memioBuildObsidianAppendBlock(clip) {
-  const tags = (clip.tags || []).join(', ');
-  return `\n## ${memioFormatReadableTimestamp(clip.createdAt)}\n${clip.text}\nTags: ${tags}\nSource: ${clip.url || ''}\n`;
+function memioBuildObsidianAppendBlock(memo) {
+  const tags = (memo.tags || []).join(', ');
+  return `\n## ${memioFormatReadableTimestamp(memo.createdAt)}\n${memo.text}\nTags: ${tags}\nSource: ${memo.url || ''}\n`;
 }
 
-function memioBuildCollationEntryBlocks(clip) {
-  const tags = (clip.tags || []).join(', ');
-  const metaLine = `Tags: ${tags} | Source: ${clip.url || ''}`;
+function memioBuildCollationEntryBlocks(memo) {
+  const tags = (memo.tags || []).join(', ');
+  const metaLine = `Tags: ${tags} | Source: ${memo.url || ''}`;
   return [
     {
       object: 'block',
       type: 'heading_2',
-      heading_2: { rich_text: [{ type: 'text', text: { content: memioFormatReadableTimestamp(clip.createdAt) } }] }
+      heading_2: { rich_text: [{ type: 'text', text: { content: memioFormatReadableTimestamp(memo.createdAt) } }] }
     },
-    { object: 'block', type: 'paragraph', paragraph: { rich_text: [{ type: 'text', text: { content: clip.text } }] } },
+    { object: 'block', type: 'paragraph', paragraph: { rich_text: [{ type: 'text', text: { content: memo.text } }] } },
     { object: 'block', type: 'paragraph', paragraph: { rich_text: [{ type: 'text', text: { content: metaLine } }] } }
   ];
 }
@@ -415,12 +415,12 @@ async function memioPostToObsidianVault(folder, filename, apiKey, body) {
   if (!res.ok) throw new Error(`Obsidian responded ${res.status}`);
 }
 
-// Individual mode: filename is the clip's title slug only (no date). If a
-// note with that exact name already exists, this clip collates into it as
-// a new H2 section by design — same-titled clips are meant to share one
+// Individual mode: filename is the memo's title slug only (no date). If a
+// note with that exact name already exists, this memo collates into it as
+// a new H2 section by design — same-titled memos are meant to share one
 // note — rather than creating a second file or overwriting the first.
-async function memioSendObsidianIndividual(clip, apiKey, folder) {
-  const filename = `${memioSlugifyForFilename(clip.title)}.md`;
+async function memioSendObsidianIndividual(memo, apiKey, folder) {
+  const filename = `${memioSlugifyForFilename(memo.title)}.md`;
   const exists = await memioObsidianFileExists(folder, filename, apiKey);
 
   if (!exists) {
@@ -428,42 +428,42 @@ async function memioSendObsidianIndividual(clip, apiKey, folder) {
     // one scalar value, not a list — Obsidian then treats "a, b" as a
     // single tag. A flow-sequence ("tags: [a, b]") is unambiguous and is
     // what actually registers as separate tags.
-    const obsidianTags = (clip.tags || []).map(memioToObsidianTag).filter(Boolean);
-    const body = `---\ncreated: ${clip.createdAt}\ntags: [${obsidianTags.join(', ')}]\nsource: ${clip.url}\n---\n${clip.text}\n`;
+    const obsidianTags = (memo.tags || []).map(memioToObsidianTag).filter(Boolean);
+    const body = `---\ncreated: ${memo.createdAt}\ntags: [${obsidianTags.join(', ')}]\nsource: ${memo.url}\n---\n${memo.text}\n`;
     await memioPostToObsidianVault(folder, filename, apiKey, body);
     return;
   }
 
-  await memioPostToObsidianVault(folder, filename, apiKey, memioBuildObsidianAppendBlock(clip));
+  await memioPostToObsidianVault(folder, filename, apiKey, memioBuildObsidianAppendBlock(memo));
 }
 
-async function memioSendObsidianCollated(clip, apiKey, folder, period) {
-  const filename = memioGetObsidianCollationFilename(period, clip);
+async function memioSendObsidianCollated(memo, apiKey, folder, period) {
+  const filename = memioGetObsidianCollationFilename(period, memo);
   const exists = await memioObsidianFileExists(folder, filename, apiKey);
 
   let body = '';
   if (!exists) {
-    const heading = await memioGetAiCollationHeading(period, clip);
+    const heading = await memioGetAiCollationHeading(period, memo);
     if (heading) body += `# ${heading}\n`;
   }
-  body += memioBuildObsidianAppendBlock(clip);
+  body += memioBuildObsidianAppendBlock(memo);
 
   await memioPostToObsidianVault(folder, filename, apiKey, body);
 }
 
-async function memioSendToObsidian(clip, config, context, destinationFolder) {
+async function memioSendToObsidian(memo, config, context, destinationFolder) {
   const apiKey = memioNormalizeBearerToken(config.apiKey);
   if (!apiKey) throw new Error('Missing API key');
-  const rawFolder = destinationFolder || (config.folders && config.folders[0]) || 'clips';
-  const folder = rawFolder.replace(/^\/+|\/+$/g, '') || 'clips';
+  const rawFolder = destinationFolder || (config.folders && config.folders[0]) || 'memos';
+  const folder = rawFolder.replace(/^\/+|\/+$/g, '') || 'memos';
 
   const period = config.collation;
   if (period && period !== 'individual') {
-    await memioSendObsidianCollated(clip, apiKey, folder, period);
+    await memioSendObsidianCollated(memo, apiKey, folder, period);
     return;
   }
 
-  await memioSendObsidianIndividual(clip, apiKey, folder);
+  await memioSendObsidianIndividual(memo, apiKey, folder);
 }
 
 async function memioGetNotionSchema(databaseId, token) {
@@ -483,7 +483,7 @@ async function memioGetNotionSchema(databaseId, token) {
 
 // Tries the pages endpoint first, then databases — whichever succeeds tells
 // us both the display title (for the destination list) and which shape of
-// "parent" to use later when actually sending a clip there.
+// "parent" to use later when actually sending a memo there.
 async function memioFetchNotionTitle(id, token) {
   const headers = { Authorization: `Bearer ${token}`, 'Notion-Version': '2022-06-28' };
 
@@ -579,9 +579,9 @@ async function memioSearchNotionPageByTitle(title, token, dest) {
   return match ? match.id : null;
 }
 
-async function memioSendToNotionCollated(clip, config, dest, period) {
-  const title = memioGetFallbackPeriodTitle(period, clip);
-  const blocks = memioBuildCollationEntryBlocks(clip);
+async function memioSendToNotionCollated(memo, config, dest, period) {
+  const title = memioGetFallbackPeriodTitle(period, memo);
+  const blocks = memioBuildCollationEntryBlocks(memo);
 
   const existingId = await memioSearchNotionPageByTitle(title, config.token, dest);
   if (existingId) {
@@ -592,21 +592,21 @@ async function memioSendToNotionCollated(clip, config, dest, period) {
   await memioCreateNotionCollationPage(dest, title, blocks, config.token);
 }
 
-async function memioSendToNotion(clip, config, context, destination) {
+async function memioSendToNotion(memo, config, context, destination) {
   const dest = destination || (config.pages && config.pages[0]);
   if (!config.token || !dest || !dest.id) throw new Error('Missing credentials');
 
   const period = config.collation;
   if (period && period !== 'individual') {
-    await memioSendToNotionCollated(clip, config, dest, period);
+    await memioSendToNotionCollated(memo, config, dest, period);
     return;
   }
 
-  const title = memioBuildSendTitle(clip, context);
-  const tags = clip.tags || [];
+  const title = memioBuildSendTitle(memo, context);
+  const tags = memo.tags || [];
 
   if (dest.type === 'page') {
-    const metaLine = [tags.length ? `Tags: ${tags.join(', ')}` : null, clip.url ? `Source: ${clip.url}` : null, `Saved: ${clip.createdAt}`]
+    const metaLine = [tags.length ? `Tags: ${tags.join(', ')}` : null, memo.url ? `Source: ${memo.url}` : null, `Saved: ${memo.createdAt}`]
       .filter(Boolean)
       .join(' · ');
 
@@ -621,7 +621,7 @@ async function memioSendToNotion(clip, config, context, destination) {
     children.push({
       object: 'block',
       type: 'paragraph',
-      paragraph: { rich_text: [{ type: 'text', text: { content: clip.text } }] }
+      paragraph: { rich_text: [{ type: 'text', text: { content: memo.text } }] }
     });
 
     const res = await fetch('https://api.notion.com/v1/pages', {
@@ -649,8 +649,8 @@ async function memioSendToNotion(clip, config, context, destination) {
   // not structured data, and reads like a single blob either way.
   const metaLine = [
     !multiSelectKey && tags.length ? `Tags: ${tags.join(', ')}` : null,
-    clip.url ? `Source: ${clip.url}` : null,
-    `Saved: ${clip.createdAt}`
+    memo.url ? `Source: ${memo.url}` : null,
+    `Saved: ${memo.createdAt}`
   ]
     .filter(Boolean)
     .join(' · ');
@@ -666,7 +666,7 @@ async function memioSendToNotion(clip, config, context, destination) {
   children.push({
     object: 'block',
     type: 'paragraph',
-    paragraph: { rich_text: [{ type: 'text', text: { content: clip.text } }] }
+    paragraph: { rich_text: [{ type: 'text', text: { content: memo.text } }] }
   });
 
   const properties = { [titleKey]: { title: [{ text: { content: title } }] } };
@@ -695,7 +695,7 @@ const MEMIO_CONNECTOR_SEND = {
   notion: memioSendToNotion
 };
 
-// Tag-based auto-routing: first tagRule whose tag appears on the clip wins;
+// Tag-based auto-routing: first tagRule whose tag appears on the memo wins;
 // no match returns null so callers can tell "no rule matched" apart from
 // "matched, and it happens to be the default" (the manual send-destination
 // popover needs that distinction — see memioFindMatchingTagRuleDestination).
@@ -734,7 +734,7 @@ function memioResolveDestination(id, config, tags) {
 }
 
 // Shared by the send-destination popover (content.js) and the Settings
-// destination lists below — {value} is exactly what memioSendClipToConnector's
+// destination lists below — {value} is exactly what memioSendMemoToConnector's
 // destinationOverride expects (a plain folder string for Obsidian, a
 // {id, title, type} object for Notion).
 function memioGetDestinationsForConnector(config, id) {
@@ -747,13 +747,13 @@ function memioGetDestinationsForConnector(config, id) {
   return [];
 }
 
-async function memioSendClipToConnector(id, clip, context, destinationOverride) {
+async function memioSendMemoToConnector(id, memo, context, destinationOverride) {
   const connectors = await memioGetConnectors();
   const config = connectors[id];
   const send = MEMIO_CONNECTOR_SEND[id];
   if (!send || !config) throw new Error('Unknown connector');
-  const destination = destinationOverride !== undefined ? destinationOverride : memioResolveDestination(id, config, clip.tags);
-  await send(clip, config, context, destination);
+  const destination = destinationOverride !== undefined ? destinationOverride : memioResolveDestination(id, config, memo.tags);
+  await send(memo, config, context, destination);
 }
 
 const MEMIO_CONNECTOR_TESTS = {
@@ -788,11 +788,11 @@ const MEMIO_CONNECTOR_TESTS = {
   }
 };
 
-function memioBuildTitlePrompt(clipText, tags, url) {
+function memioBuildTitlePrompt(memoText, tags, url) {
   return (
-    'Generate a short title of maximum 6 words for this saved clip. ' +
+    'Generate a short title of maximum 6 words for this saved memo. ' +
     'Return only the title, no punctuation, no quotes, nothing else.\n\n' +
-    `Clip: ${clipText}\nTags: ${(tags || []).join(', ')}\nSource: ${url || ''}`
+    `Memo: ${memoText}\nTags: ${(tags || []).join(', ')}\nSource: ${url || ''}`
   );
 }
 
@@ -865,13 +865,13 @@ const MEMIO_AI_GENERATORS = {
   gemini: memioGenerateTitleGemini
 };
 
-async function memioGenerateTitle(clipText, tags, url) {
+async function memioGenerateTitle(memoText, tags, url) {
   const connectors = await memioGetConnectors();
   const ai = connectors.ai || {};
   if (!ai.enabled || !ai.apiKey) throw new Error('NO_KEY');
 
   const generate = MEMIO_AI_GENERATORS[ai.provider] || MEMIO_AI_GENERATORS.claude;
-  const prompt = memioBuildTitlePrompt(clipText, tags, url);
+  const prompt = memioBuildTitlePrompt(memoText, tags, url);
   const title = await generate(ai.apiKey, prompt);
   if (!title) throw new Error('Empty response from AI provider');
   return title;
@@ -1379,7 +1379,7 @@ async function memioRenderConnectorSections() {
   });
 }
 
-// Renders the COLLATION subsection — radio group choosing how clips for a
+// Renders the COLLATION subsection — radio group choosing how memos for a
 // given connector are grouped when sent (individual/daily/weekly/monthly).
 // Per-connector, independent of the other connector's setting.
 function memioRenderCollationSection(body, def) {
@@ -1388,14 +1388,14 @@ function memioRenderCollationSection(body, def) {
 
     const subline = document.createElement('p');
     subline.className = 'settings-helper-text';
-    subline.textContent = 'Choose how clips are grouped when sent.';
+    subline.textContent = 'Choose how memos are grouped when sent.';
     body.appendChild(subline);
 
     const connectors = await memioGetConnectors();
     const current = connectors[def.id].collation || 'individual';
 
     const options = [
-      ['individual', 'Individual notes (one per clip)'],
+      ['individual', 'Individual notes (one per memo)'],
       ['daily', 'Daily (one note per day)'],
       ['weekly', 'Weekly (one note per week, Mon–Sun)'],
       ['monthly', 'Monthly (one note per month)']

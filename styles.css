@@ -442,8 +442,8 @@
   display: none;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
-  padding: 32px 8px;
+  gap: 8px;
+  padding: 12px 8px;
 }
 .empty-state-block:not([hidden]) {
   display: flex;
@@ -462,20 +462,20 @@
   color: var(--text-primary);
 }
 
-.clip-count {
+.memo-count {
   display: flex;
   align-items: baseline;
   gap: 6px;
   margin: 2px 0 0;
 }
-.clip-count-label {
+.memo-count-label {
   font-size: 11px;
   color: var(--text-muted);
   font-family: 'DM Sans', sans-serif;
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
-.clip-count-number {
+.memo-count-number {
   font-family: 'DM Sans', sans-serif;
   font-weight: 700;
   font-size: 11px;
@@ -537,14 +537,14 @@
   padding-bottom: 4px;
 }
 
-.clip-view,
+.memo-view,
 .history-view {
   display: none;
   flex-direction: column;
   gap: 8px;
   padding-top: 8px;
 }
-.clip-view:not([hidden]),
+.memo-view:not([hidden]),
 .history-view:not([hidden]) {
   display: flex;
 }
@@ -647,7 +647,7 @@
   animation: memioSpin 600ms linear infinite;
 }
 
-.clip-textarea {
+.memo-textarea {
   width: 100%;
   min-height: 120px;
   resize: vertical;
@@ -659,11 +659,11 @@
   font-size: 13px;
   padding: 8px;
 }
-.clip-edit-textarea {
+.memo-edit-textarea {
   min-height: 80px;
 }
 
-.clip-textarea:focus {
+.memo-textarea:focus {
   outline: none;
   border-color: var(--accent);
 }
@@ -673,7 +673,7 @@
  * default grey instead of our own --text-muted, which is illegible against
  * some accent/background combinations (e.g. Ocean blue).
  */
-.clip-textarea::placeholder,
+.memo-textarea::placeholder,
 .tag-input::placeholder,
 .tag-input-text::placeholder,
 .search-input::placeholder,
@@ -898,13 +898,13 @@ a.btn-primary {
   cursor: pointer;
 }
 
-.clip-list {
+.memo-list {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-.clip-card {
+.memo-card {
   background: var(--bg-surface);
   border: 1px solid var(--border-default);
   border-radius: 4px;
@@ -914,11 +914,11 @@ a.btn-primary {
   gap: 4px;
   transition: opacity 200ms ease;
 }
-.clip-card.fade-out {
+.memo-card.fade-out {
   opacity: 0;
 }
 
-.clip-title {
+.memo-title {
   font-family: 'DM Sans', sans-serif;
   font-weight: 700;
   font-size: 13px;
@@ -926,7 +926,7 @@ a.btn-primary {
   margin: 0;
 }
 
-.clip-meta {
+.memo-meta {
   display: flex;
   gap: 8px;
   font-size: 11px;
@@ -935,11 +935,11 @@ a.btn-primary {
   flex-wrap: wrap;
   font-family: 'DM Sans', sans-serif;
 }
-.clip-url {
+.memo-url {
   color: var(--accent);
   text-decoration: none;
 }
-.clip-url:hover {
+.memo-url:hover {
   color: var(--accent-hover);
   text-decoration: underline;
 }
@@ -982,7 +982,7 @@ a.btn-primary {
   }
 }
 
-.clip-text {
+.memo-text {
   font-size: 13px;
   margin: 0;
   cursor: pointer;
@@ -992,12 +992,12 @@ a.btn-primary {
   overflow: hidden;
   white-space: pre-wrap;
 }
-.clip-text.expanded {
+.memo-text.expanded {
   -webkit-line-clamp: unset;
   overflow: visible;
 }
 
-.clip-actions {
+.memo-actions {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1025,7 +1025,7 @@ a.btn-primary {
   font-family: 'DM Sans', sans-serif;
   color: var(--text-muted);
   text-align: center;
-  padding: 24px 8px;
+  padding: 0 8px;
   font-size: 13px;
 }
 .empty-state-tip {
@@ -1234,7 +1234,7 @@ a.btn-primary {
   color: var(--accent);
 }
 
-.clip-footer {
+.memo-footer {
   display: flex;
   align-items: center;
   justify-content: space-between;

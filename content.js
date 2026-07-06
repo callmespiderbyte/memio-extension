@@ -1,10 +1,10 @@
 // Memio now lives as a shadow-DOM window injected into the page, toggled by
 // the toolbar icon, instead of a browser_action popup. This file owns: the
 // injection/shadow-DOM bootstrap, dragging, position persistence, and the
-// merged Clip-view + History-view logic that used to live in separate
+// merged Memo-view + History-view logic that used to live in separate
 // popup.js / history.js files loaded by separate popup/history pages.
 (function () {
-  const MEMIO_CLIPS_KEY = 'memio_clips';
+  const MEMIO_MEMOS_KEY = 'memio_memos';
   const MEMIO_DRAFT_KEY = 'memio_draft';
   // Single source of truth is manifest.json — reading it here means the
   // footer can never drift out of sync with the actual installed version.
@@ -16,19 +16,19 @@
   let historyLoadedOnce = false;
   let creatingPromise = null;
 
-  let allClips = [];
+  let allMemos = [];
   let selectedTags = [];
 
   // ---------------------------------------------------------------------
   // Storage helpers
   // ---------------------------------------------------------------------
-  async function getClips() {
-    const { memio_clips } = await chrome.storage.sync.get(MEMIO_CLIPS_KEY);
-    return memio_clips || [];
+  async function getMemos() {
+    const { memio_memos } = await chrome.storage.sync.get(MEMIO_MEMOS_KEY);
+    return memio_memos || [];
   }
 
-  async function saveClips(clips) {
-    await chrome.storage.sync.set({ [MEMIO_CLIPS_KEY]: clips });
+  async function saveMemos(memos) {
+    await chrome.storage.sync.set({ [MEMIO_MEMOS_KEY]: memos });
   }
 
   async function getDraft() {
@@ -84,12 +84,12 @@
     return `${d.getUTCFullYear()}-W${weekNo}`;
   }
 
-  function matchesTimeRange(clipDate, range, now) {
+  function matchesTimeRange(memoDate, range, now) {
     if (!range || range === 'all') return true;
-    if (range === 'today') return clipDate.toDateString() === now.toDateString();
-    if (range === 'week') return memioIsoWeekKey(clipDate) === memioIsoWeekKey(now);
-    if (range === 'month') return clipDate.getFullYear() === now.getFullYear() && clipDate.getMonth() === now.getMonth();
-    if (range === 'year') return clipDate.getFullYear() === now.getFullYear();
+    if (range === 'today') return memoDate.toDateString() === now.toDateString();
+    if (range === 'week') return memioIsoWeekKey(memoDate) === memioIsoWeekKey(now);
+    if (range === 'month') return memoDate.getFullYear() === now.getFullYear() && memoDate.getMonth() === now.getMonth();
+    if (range === 'year') return memoDate.getFullYear() === now.getFullYear();
     return true;
   }
 
@@ -118,17 +118,6 @@
     const style = document.createElement('style');
     style.textContent = cssText;
     root.appendChild(style);
-  }
-
-  function memioEmptySavesIllustration() {
-    return `
-      <svg class="empty-illustration" viewBox="0 0 120 80" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-        <rect x="20" y="24" width="60" height="8" rx="2" stroke="currentColor" stroke-width="2" fill="none"/>
-        <rect x="20" y="24" width="34" height="8" rx="2" fill="currentColor" opacity="0.15"/>
-        <rect x="20" y="40" width="46" height="8" rx="2" stroke="currentColor" stroke-width="2" fill="none"/>
-        <line x1="86" y1="18" x2="86" y2="54" stroke="currentColor" stroke-width="2"/>
-      </svg>
-    `;
   }
 
   function memioEmptyHistoryIllustration() {
@@ -171,28 +160,27 @@
       <button type="button" class="settings-banner-close" id="settingsBannerClose" aria-label="Dismiss">&times;</button>
     </div>
 
-    <p class="clip-count" id="clipCount">
-      <span class="clip-count-label">Total clips</span>
-      <span class="clip-count-number" id="clipCountNumber">0</span>
+    <p class="memo-count" id="memoCount">
+      <span class="memo-count-label">Total memos</span>
+      <span class="memo-count-number" id="memoCountNumber">0</span>
     </p>
 
-    <main class="clip-view" id="clipView">
+    <main class="memo-view" id="memoView">
       <div class="title-row">
-        <input type="text" id="clipTitle" class="title-input" placeholder="Title" />
+        <input type="text" id="memoTitle" class="title-input" placeholder="Title" />
         <button type="button" id="generateTitleBtn" class="wand-btn" aria-label="Generate title with AI" data-tooltip="Generate a title with AI" title="">&#10022;</button>
       </div>
       <p class="title-hint" id="titleHint" hidden>Add a title to save</p>
       <p class="title-hint" id="wandError" hidden></p>
-      <textarea id="clipText" class="clip-textarea" placeholder="Type or paste something worth keeping..."></textarea>
+      <textarea id="memoText" class="memo-textarea" placeholder="Type or paste something worth keeping..."></textarea>
       <div class="source-url" id="sourceUrl"></div>
       <div id="tagInputField" class="tag-input"></div>
       <button type="button" class="btn-primary" id="saveBtn">Save it</button>
       <p class="saved-confirm" id="savedConfirm">Saved.</p>
 
       <div class="empty-state-block" id="savesEmptyState" hidden>
-        ${memioEmptySavesIllustration()}
         <p class="empty-state">Type or paste the thought, idea, or info-bit that you don't want to lose here.</p>
-        <p class="empty-state-tip">Pro-tip: Highlight text on the page before clicking this extension, and that text will auto-populate here!</p>
+        <p class="empty-state-tip">Pro-tip: Highlight text on any page first, then click the extension icon, to auto-populate text for saving.</p>
       </div>
     </main>
 
@@ -228,11 +216,11 @@
             </div>
             <p class="settings-label">Scope</p>
             <div class="radio-group">
-              <label class="radio-option"><input type="radio" name="exportScope" value="all" checked /> All clips</label>
+              <label class="radio-option"><input type="radio" name="exportScope" value="all" checked /> All memos</label>
               <label class="radio-option"><input type="radio" name="exportScope" value="view" /> Current view</label>
-              <label class="radio-option"><input type="radio" name="exportScope" value="today" /> Today's clips</label>
-              <label class="radio-option"><input type="radio" name="exportScope" value="week" /> This week's clips</label>
-              <label class="radio-option"><input type="radio" name="exportScope" value="month" /> This month's clips</label>
+              <label class="radio-option"><input type="radio" name="exportScope" value="today" /> Today's memos</label>
+              <label class="radio-option"><input type="radio" name="exportScope" value="week" /> This week's memos</label>
+              <label class="radio-option"><input type="radio" name="exportScope" value="month" /> This month's memos</label>
             </div>
             <button class="btn-primary" id="exportConfirmBtn" type="button">Export</button>
           </div>
@@ -245,7 +233,7 @@
         </div>
       </div>
 
-      <div class="clip-list" id="clipList"></div>
+      <div class="memo-list" id="memoList"></div>
       <div class="empty-state-block" id="historyEmptyState" hidden>
         ${memioEmptyHistoryIllustration()}
         <p class="empty-state" id="emptyState"></p>
@@ -279,7 +267,7 @@
           <span>Auto-send on save</span>
           <input type="checkbox" class="toggle-switch" id="autoSendToggle" />
         </label>
-        <p class="settings-helper-text">Clips are sent automatically every time you save a new one.</p>
+        <p class="settings-helper-text">Memos are sent automatically every time you save a new one.</p>
       </div>
       <div class="connector-sections" id="configureSections"></div>
     </div>
@@ -320,12 +308,12 @@
   <div class="settings-overlay" id="helpOverlay" hidden>
     <div class="settings-panel help-panel">
       <div class="settings-header">
-        <h2 class="settings-title">Help &amp; FAQs</h2>
+        <h2 class="settings-title">Help</h2>
         <button type="button" class="icon-btn icon-btn-large" id="closeHelpBtn" aria-label="Close" title="Close">&times;</button>
       </div>
       <div class="help-faq-scroll" id="helpFaqScroll"></div>
       <div class="help-feedback-footer">
-        <p class="help-feedback-text">Found a bug? Want a feature? Send it over — I read everything.</p>
+        <p class="help-feedback-text">Found a bug? Want a feature? Send it over. I read everything.</p>
         <a class="btn-secondary help-feedback-btn" href="mailto:design+memio@jomiro.de">Email feedback</a>
       </div>
     </div>
@@ -334,9 +322,9 @@
   <div class="tour-welcome-overlay" id="tourWelcomeOverlay" hidden>
     <div class="tour-welcome-modal">
       <h2 class="tour-welcome-headline">Save what's worth it.</h2>
-      <p class="tour-welcome-body">Memio is a personal knowledge tool that lives in your browser. Clip anything. Tag it. Find it later. Send it straight to Obsidian, Notion, or Google Drive.</p>
+      <p class="tour-welcome-body">Memio is a personal knowledge tool that lives in your browser. Save anything. Tag it. Find it later. Send it straight to Obsidian, Notion, or Google Drive.</p>
       <p class="tour-welcome-subline">Takes 30 seconds to set up. Zero accounts required.</p>
-      <button type="button" class="btn-primary tour-welcome-cta" id="tourWelcomeCta">Save my first clip &rarr;</button>
+      <button type="button" class="btn-primary tour-welcome-cta" id="tourWelcomeCta">Save my first memo &rarr;</button>
       <button type="button" class="tour-skip-link" id="tourWelcomeSkip">Skip tour</button>
     </div>
   </div>
@@ -374,15 +362,15 @@
 
   const MEMIO_TOUR_STEPS = [
     {
-      targetId: 'clipText',
-      borderId: 'clipText',
+      targetId: 'memoText',
+      borderId: 'memoText',
       headline: 'Add a thought here',
       body: 'Type or paste anything worth keeping.',
       tip: '💡 Highlight text on any page first, then click the extension — it auto-populates here.'
     },
     {
       targetSelector: '.title-row',
-      borderId: 'clipTitle',
+      borderId: 'memoTitle',
       headline: 'Give it a title',
       body: 'Required to save. Keep it short and scannable.',
       tip: '💡 You can connect an AI provider later in Settings to generate a title automatically using the star button →'
@@ -391,14 +379,14 @@
       targetId: 'tagInputField',
       borderId: 'tagInputField',
       headline: 'Add tags',
-      body: 'Separate with commas. Tag smartly — you can use tags to auto-route clips to specific folders in Obsidian or Notion later.',
+      body: 'Separate with commas. Tag smartly — you can use tags to auto-route memos to specific folders in Obsidian or Notion later.',
       tip: '💡 Set up connectors and tag routing under Settings.'
     },
     {
       targetId: 'saveBtn',
       isFinal: true,
       headline: 'Ready? Save it.',
-      body: 'Click save to keep your first clip.'
+      body: 'Click save to keep your first memo.'
     }
   ];
 
@@ -510,8 +498,8 @@
     const { tourSeen } = await chrome.storage.sync.get('tourSeen');
     if (tourSeen) return;
 
-    const clips = await getClips();
-    if (clips.length > 0) {
+    const memos = await getMemos();
+    if (memos.length > 0) {
       await chrome.storage.sync.set({ tourSeen: true });
       return;
     }
@@ -566,17 +554,17 @@
     if (n === 1) await showSettingsBannerIfNeeded();
   }
 
-  async function checkMilestones(clipCount) {
-    const { firstClipSaved, seenMilestones } = await chrome.storage.sync.get(['firstClipSaved', 'seenMilestones']);
+  async function checkMilestones(memoCount) {
+    const { firstMemoSaved, seenMilestones } = await chrome.storage.sync.get(['firstMemoSaved', 'seenMilestones']);
 
-    if (!firstClipSaved) {
-      await chrome.storage.sync.set({ firstClipSaved: true });
+    if (!firstMemoSaved) {
+      await chrome.storage.sync.set({ firstMemoSaved: true });
       await fireMilestone(1);
       return;
     }
 
     const seen = seenMilestones || [];
-    const hit = MEMIO_MILESTONE_NUMBERS.find((n) => clipCount === n && !seen.includes(n));
+    const hit = MEMIO_MILESTONE_NUMBERS.find((n) => memoCount === n && !seen.includes(n));
     if (hit) {
       await chrome.storage.sync.set({ seenMilestones: [...seen, hit] });
       await fireMilestone(hit);
@@ -584,7 +572,7 @@
   }
 
   // ---------------------------------------------------------------------
-  // Settings nudge banner — shown once firstClipSaved is true, dismissable
+  // Settings nudge banner — shown once firstMemoSaved is true, dismissable
   // forever via chrome.storage.sync.settingsBannerDismissed.
   // ---------------------------------------------------------------------
   async function showSettingsBannerIfNeeded() {
@@ -606,17 +594,17 @@
 
   async function initPostSaveFeatures() {
     initSettingsBanner();
-    const { firstClipSaved } = await chrome.storage.sync.get('firstClipSaved');
-    if (firstClipSaved) await showSettingsBannerIfNeeded();
+    const { firstMemoSaved } = await chrome.storage.sync.get('firstMemoSaved');
+    if (firstMemoSaved) await showSettingsBannerIfNeeded();
   }
 
   // ---------------------------------------------------------------------
-  // Clip view
+  // Memo view
   // ---------------------------------------------------------------------
-  let displayedClipCount = 0;
+  let displayedMemoCount = 0;
 
-  function animateClipCountTo(numberEl, to) {
-    const from = displayedClipCount;
+  function animateMemoCountTo(numberEl, to) {
+    const from = displayedMemoCount;
     const duration = 500;
     const start = performance.now();
 
@@ -629,22 +617,22 @@
     requestAnimationFrame(step);
   }
 
-  function setClipCountDisplay(count, animate) {
-    const numberEl = memioQ('clipCountNumber');
-    if (animate && count !== displayedClipCount) {
-      animateClipCountTo(numberEl, count);
+  function setMemoCountDisplay(count, animate) {
+    const numberEl = memioQ('memoCountNumber');
+    if (animate && count !== displayedMemoCount) {
+      animateMemoCountTo(numberEl, count);
     } else {
       numberEl.textContent = String(count);
     }
-    displayedClipCount = count;
+    displayedMemoCount = count;
   }
 
-  async function updateClipCount(animate) {
-    const clips = await getClips();
-    setClipCountDisplay(clips.length, animate);
+  async function updateMemoCount(animate) {
+    const memos = await getMemos();
+    setMemoCountDisplay(memos.length, animate);
   }
 
-  async function autoSendClipIfEnabled(clip) {
+  async function autoSendMemoIfEnabled(memo) {
     const { autoSendOnSave } = await getStoredThemeSettings();
     if (!autoSendOnSave) return;
 
@@ -654,7 +642,7 @@
     const sentTo = [];
     for (const connector of enabled) {
       try {
-        await memioSendClipToConnector(connector.id, clip);
+        await memioSendMemoToConnector(connector.id, memo);
         sentTo.push(connector.id);
       } catch (err) {
         // Leave it off sentTo — it'll still show up in History with a
@@ -663,20 +651,20 @@
     }
 
     if (sentTo.length === 0) return;
-    const clips = await getClips();
-    const idx = clips.findIndex((c) => c.id === clip.id);
+    const memos = await getMemos();
+    const idx = memos.findIndex((c) => c.id === memo.id);
     if (idx !== -1) {
-      clips[idx] = Object.assign({}, clips[idx], { sentTo });
-      await saveClips(clips);
+      memos[idx] = Object.assign({}, memos[idx], { sentTo });
+      await saveMemos(memos);
     }
   }
 
-  async function initClipView() {
-    const titleInput = memioQ('clipTitle');
+  async function initMemoView() {
+    const titleInput = memioQ('memoTitle');
     const titleHint = memioQ('titleHint');
     const wandError = memioQ('wandError');
     const wandBtn = memioQ('generateTitleBtn');
-    const textarea = memioQ('clipText');
+    const textarea = memioQ('memoText');
     const sourceUrlEl = memioQ('sourceUrl');
     const saveBtn = memioQ('saveBtn');
     const tagInputField = memioQ('tagInputField');
@@ -782,27 +770,27 @@
     });
 
     saveBtn.addEventListener('click', async () => {
-      const clipTitle = titleInput.value.trim();
-      if (!clipTitle) {
+      const memoTitle = titleInput.value.trim();
+      if (!memoTitle) {
         titleInput.classList.add('invalid');
         titleHint.hidden = false;
         return;
       }
 
-      const clipText = textarea.value.trim();
+      const memoText = textarea.value.trim();
 
-      const clip = {
+      const memo = {
         id: memioUuid(),
-        title: clipTitle,
-        text: clipText,
+        title: memoTitle,
+        text: memoText,
         tags: tagWidget.getTags(),
         createdAt: new Date().toISOString(),
         url: sourceUrlEl.dataset.url || ''
       };
 
-      const clips = await getClips();
-      clips.unshift(clip);
-      await saveClips(clips);
+      const memos = await getMemos();
+      memos.unshift(memo);
+      await saveMemos(memos);
       await clearDraft();
 
       saveBtn.classList.add('pulse');
@@ -819,33 +807,33 @@
       savedConfirm.classList.add('visible');
       setTimeout(() => savedConfirm.classList.remove('visible'), 1500);
 
-      await updateClipCount(true);
-      await autoSendClipIfEnabled(clip);
+      await updateMemoCount(true);
+      await autoSendMemoIfEnabled(memo);
 
       if (tourActive && tourStepIndex === MEMIO_TOUR_STEPS.length - 1) await endTour();
-      await checkMilestones(clips.length);
+      await checkMilestones(memos.length);
     });
   }
 
   // ---------------------------------------------------------------------
   // History view
   // ---------------------------------------------------------------------
-  async function loadClips() {
-    allClips = await getClips();
-    allClips.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  async function loadMemos() {
+    allMemos = await getMemos();
+    allMemos.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
     populateFilters();
-    renderClips();
-    updateHistoryClipCount();
+    renderMemos();
+    updateHistoryMemoCount();
     await refreshSendAllVisibility();
   }
 
-  function updateHistoryClipCount() {
-    setClipCountDisplay(allClips.length, false);
+  function updateHistoryMemoCount() {
+    setMemoCountDisplay(allMemos.length, false);
   }
 
   function populateFilters() {
     const tagSet = new Set();
-    allClips.forEach((clip) => (clip.tags || []).forEach((t) => tagSet.add(t)));
+    allMemos.forEach((memo) => (memo.tags || []).forEach((t) => tagSet.add(t)));
 
     selectedTags = selectedTags.filter((t) => tagSet.has(t));
     renderTagFilterOptions(Array.from(tagSet).sort());
@@ -885,7 +873,7 @@
           selectedTags = selectedTags.filter((t) => t !== tag);
         }
         updateTagFilterTrigger();
-        renderClips();
+        renderMemos();
       });
 
       const text = document.createElement('span');
@@ -897,18 +885,18 @@
     });
   }
 
-  function getFilteredClips() {
+  function getFilteredMemos() {
     const query = memioQ('searchInput').value.trim().toLowerCase();
     const timeRange = memioQ('timeRangeFilter').value;
     const now = new Date();
 
-    return allClips.filter((clip) => {
+    return allMemos.filter((memo) => {
       if (query) {
-        const haystack = ((clip.title || '') + ' ' + clip.text + ' ' + (clip.tags || []).join(' ')).toLowerCase();
+        const haystack = ((memo.title || '') + ' ' + memo.text + ' ' + (memo.tags || []).join(' ')).toLowerCase();
         if (!haystack.includes(query)) return false;
       }
-      if (selectedTags.length && !selectedTags.every((t) => (clip.tags || []).includes(t))) return false;
-      if (!matchesTimeRange(new Date(clip.createdAt), timeRange, now)) return false;
+      if (selectedTags.length && !selectedTags.every((t) => (memo.tags || []).includes(t))) return false;
+      if (!matchesTimeRange(new Date(memo.createdAt), timeRange, now)) return false;
       return true;
     });
   }
@@ -934,44 +922,44 @@
     return parts.join(', ');
   }
 
-  function getScopedClips(scope) {
+  function getScopedMemos(scope) {
     const now = new Date();
-    if (scope === 'view') return getFilteredClips();
+    if (scope === 'view') return getFilteredMemos();
     if (scope === 'today' || scope === 'week' || scope === 'month') {
-      return allClips.filter((c) => matchesTimeRange(new Date(c.createdAt), scope, now));
+      return allMemos.filter((c) => matchesTimeRange(new Date(c.createdAt), scope, now));
     }
-    return allClips;
+    return allMemos;
   }
 
-  function renderClips() {
-    const list = memioQ('clipList');
+  function renderMemos() {
+    const list = memioQ('memoList');
     const emptyBlock = memioQ('historyEmptyState');
     const emptyText = memioQ('emptyState');
-    const filtered = getFilteredClips();
+    const filtered = getFilteredMemos();
 
     list.innerHTML = '';
 
-    if (allClips.length === 0) {
+    if (allMemos.length === 0) {
       emptyBlock.hidden = false;
-      emptyText.textContent = 'Nothing saved yet. memio, start somewhere.';
+      emptyText.textContent = 'Nothing saved yet. Start somewhere.';
       return;
     }
 
     if (filtered.length === 0) {
       emptyBlock.hidden = false;
-      emptyText.textContent = 'No clips match that. Try broader terms.';
+      emptyText.textContent = 'No memos match that. Try broader terms.';
       return;
     }
 
     emptyBlock.hidden = true;
 
-    filtered.forEach((clip) => {
-      list.appendChild(buildClipCard(clip));
+    filtered.forEach((memo) => {
+      list.appendChild(buildMemoCard(memo));
     });
   }
 
   // ---------------------------------------------------------------------
-  // Send-destination popover — shown from a clip card's "Send to X" when
+  // Send-destination popover — shown from a memo card's "Send to X" when
   // that connector has more than one saved destination (0 = nudge toward
   // Settings, 1 = skip the popover and send straight to it).
   // ---------------------------------------------------------------------
@@ -1054,11 +1042,11 @@
     bindPopoverOutsideClose(wrap, pop);
   }
 
-  async function buildSendToControl(clip, statusHost) {
+  async function buildSendToControl(memo, statusHost) {
     const enabled = await memioGetEnabledConnectors();
     if (enabled.length === 0) return null;
 
-    const alreadySent = clip.sentTo || [];
+    const alreadySent = memo.sentTo || [];
     const available = enabled.filter((c) => !alreadySent.includes(c.id));
 
     const wrap = document.createElement('div');
@@ -1096,13 +1084,13 @@
           statusHost.className = 'send-status';
 
           try {
-            await memioSendClipToConnector(c.id, clip, undefined, destination);
+            await memioSendMemoToConnector(c.id, memo, undefined, destination);
             statusHost.textContent = 'Sent.';
             statusHost.className = 'send-status success';
-            await updateClip(clip.id, { sentTo: Array.from(new Set([...(clip.sentTo || []), c.id])) });
+            await updateMemo(memo.id, { sentTo: Array.from(new Set([...(memo.sentTo || []), c.id])) });
             setTimeout(() => {
               populateFilters();
-              renderClips();
+              renderMemos();
             }, 1500);
           } catch (err) {
             statusHost.innerHTML = '';
@@ -1127,9 +1115,9 @@
         const connectors = await memioGetConnectors();
         const config = connectors[c.id];
 
-        // A matching auto-routing rule already decided where this clip
+        // A matching auto-routing rule already decided where this memo
         // goes — skip the destination picker entirely, same as auto-send.
-        const ruleDestination = memioFindMatchingTagRuleDestination(c.id, config, clip.tags);
+        const ruleDestination = memioFindMatchingTagRuleDestination(c.id, config, memo.tags);
         if (ruleDestination !== null) {
           await performSend(ruleDestination);
           return;
@@ -1157,8 +1145,8 @@
     return wrap;
   }
 
-  function buildSentBadges(clip) {
-    const sentTo = clip.sentTo || [];
+  function buildSentBadges(memo) {
+    const sentTo = memo.sentTo || [];
     if (!sentTo.length) return null;
     const row = document.createElement('div');
     row.className = 'sent-badges';
@@ -1171,8 +1159,8 @@
     return row;
   }
 
-  function buildUnsendControl(clip) {
-    const sentTo = clip.sentTo || [];
+  function buildUnsendControl(memo) {
+    const sentTo = memo.sentTo || [];
     if (!sentTo.length) return null;
 
     const wrap = document.createElement('div');
@@ -1193,10 +1181,10 @@
       item.textContent = `Unsend from ${memioGetConnectorName(id)}`;
       item.addEventListener('click', async () => {
         menu.hidden = true;
-        const updated = (clip.sentTo || []).filter((c) => c !== id);
-        await updateClip(clip.id, { sentTo: updated });
+        const updated = (memo.sentTo || []).filter((c) => c !== id);
+        await updateMemo(memo.id, { sentTo: updated });
         populateFilters();
-        renderClips();
+        renderMemos();
       });
       menu.appendChild(item);
     });
@@ -1210,24 +1198,24 @@
     return wrap;
   }
 
-  async function updateClip(id, patch) {
-    const idx = allClips.findIndex((c) => c.id === id);
+  async function updateMemo(id, patch) {
+    const idx = allMemos.findIndex((c) => c.id === id);
     if (idx === -1) return;
-    allClips[idx] = Object.assign({}, allClips[idx], patch);
-    await saveClips(allClips);
+    allMemos[idx] = Object.assign({}, allMemos[idx], patch);
+    await saveMemos(allMemos);
   }
 
-  function buildClipCard(clip, editing) {
+  function buildMemoCard(memo, editing) {
     const card = document.createElement('div');
-    card.className = 'clip-card';
-    card.dataset.id = clip.id;
+    card.className = 'memo-card';
+    card.dataset.id = memo.id;
 
     if (editing) {
       const editTitle = document.createElement('input');
       editTitle.type = 'text';
       editTitle.className = 'title-input';
       editTitle.placeholder = 'Title';
-      editTitle.value = clip.title || '';
+      editTitle.value = memo.title || '';
       card.appendChild(editTitle);
 
       const editHint = document.createElement('p');
@@ -1242,17 +1230,17 @@
       });
 
       const editTextarea = document.createElement('textarea');
-      editTextarea.className = 'clip-textarea clip-edit-textarea';
-      editTextarea.value = clip.text;
+      editTextarea.className = 'memo-textarea memo-edit-textarea';
+      editTextarea.value = memo.text;
       card.appendChild(editTextarea);
 
       const editTagsWrap = document.createElement('div');
       editTagsWrap.className = 'tag-input';
       card.appendChild(editTagsWrap);
-      const editTagsWidget = memioCreateTagInput(editTagsWrap, clip.tags || []);
+      const editTagsWidget = memioCreateTagInput(editTagsWrap, memo.tags || []);
 
       const editFooter = document.createElement('div');
-      editFooter.className = 'clip-footer';
+      editFooter.className = 'memo-footer';
 
       const saveBtn = document.createElement('button');
       saveBtn.type = 'button';
@@ -1267,9 +1255,9 @@
         }
         const newText = editTextarea.value.trim();
         const newTags = editTagsWidget.getTags();
-        await updateClip(clip.id, { title: newTitle, text: newText, tags: newTags });
+        await updateMemo(memo.id, { title: newTitle, text: newText, tags: newTags });
         populateFilters();
-        renderClips();
+        renderMemos();
       });
 
       const cancelBtn = document.createElement('button');
@@ -1277,7 +1265,7 @@
       cancelBtn.className = 'btn-secondary';
       cancelBtn.textContent = 'Cancel';
       cancelBtn.addEventListener('click', () => {
-        renderClips();
+        renderMemos();
       });
 
       editFooter.appendChild(saveBtn);
@@ -1287,37 +1275,37 @@
       return card;
     }
 
-    if (clip.title) {
+    if (memo.title) {
       const titleEl = document.createElement('p');
-      titleEl.className = 'clip-title';
-      titleEl.textContent = clip.title;
+      titleEl.className = 'memo-title';
+      titleEl.textContent = memo.title;
       card.appendChild(titleEl);
     }
 
     const meta = document.createElement('div');
-    meta.className = 'clip-meta';
+    meta.className = 'memo-meta';
 
     const timestamp = document.createElement('span');
-    timestamp.className = 'clip-timestamp';
-    timestamp.textContent = formatTimestamp(clip.createdAt);
+    timestamp.className = 'memo-timestamp';
+    timestamp.textContent = formatTimestamp(memo.createdAt);
     meta.appendChild(timestamp);
 
-    if (clip.url) {
+    if (memo.url) {
       const link = document.createElement('a');
-      link.className = 'clip-url';
-      link.href = clip.url;
+      link.className = 'memo-url';
+      link.href = memo.url;
       link.target = '_blank';
       link.rel = 'noopener noreferrer';
-      link.textContent = truncateUrl(clip.url);
+      link.textContent = truncateUrl(memo.url);
       meta.appendChild(link);
     }
 
     card.appendChild(meta);
 
-    if (clip.tags && clip.tags.length) {
+    if (memo.tags && memo.tags.length) {
       const tagRow = document.createElement('div');
       tagRow.className = 'tag-row';
-      clip.tags.forEach((t) => {
+      memo.tags.forEach((t) => {
         const pill = document.createElement('span');
         pill.className = 'tag-pill';
         pill.textContent = t;
@@ -1326,36 +1314,36 @@
       card.appendChild(tagRow);
     }
 
-    const sentBadges = buildSentBadges(clip);
+    const sentBadges = buildSentBadges(memo);
     if (sentBadges) card.appendChild(sentBadges);
 
     const textEl = document.createElement('p');
-    textEl.className = 'clip-text';
-    textEl.textContent = clip.text;
+    textEl.className = 'memo-text';
+    textEl.textContent = memo.text;
     textEl.addEventListener('click', () => {
       textEl.classList.toggle('expanded');
     });
     card.appendChild(textEl);
 
     const footer = document.createElement('div');
-    footer.className = 'clip-footer';
+    footer.className = 'memo-footer';
 
     const statusHost = document.createElement('span');
     statusHost.className = 'send-status';
 
-    buildSendToControl(clip, statusHost).then((control) => {
+    buildSendToControl(memo, statusHost).then((control) => {
       if (control) footer.insertBefore(control, footer.firstChild);
     });
 
     const actions = document.createElement('div');
-    actions.className = 'clip-actions';
+    actions.className = 'memo-actions';
 
     const editBtn = document.createElement('button');
     editBtn.type = 'button';
     editBtn.className = 'edit-btn';
     editBtn.textContent = 'Edit';
     editBtn.addEventListener('click', () => {
-      const editCard = buildClipCard(clip, true);
+      const editCard = buildMemoCard(memo, true);
       card.replaceWith(editCard);
     });
 
@@ -1366,16 +1354,16 @@
     deleteBtn.addEventListener('click', () => {
       card.classList.add('fade-out');
       setTimeout(async () => {
-        allClips = allClips.filter((c) => c.id !== clip.id);
-        await saveClips(allClips);
+        allMemos = allMemos.filter((c) => c.id !== memo.id);
+        await saveMemos(allMemos);
         populateFilters();
-        renderClips();
-        updateHistoryClipCount();
+        renderMemos();
+        updateHistoryMemoCount();
         await refreshSendAllVisibility();
       }, 200);
     });
 
-    const unsendControl = buildUnsendControl(clip);
+    const unsendControl = buildUnsendControl(memo);
 
     actions.appendChild(editBtn);
     if (unsendControl) actions.appendChild(unsendControl);
@@ -1388,17 +1376,17 @@
     return card;
   }
 
-  function toCSV(clips) {
+  function toCSV(memos) {
     const esc = (s) => `"${String(s).replace(/"/g, '""')}"`;
     const header = 'createdAt,title,text,tags,url';
-    const rows = clips.map((c) =>
+    const rows = memos.map((c) =>
       [esc(c.createdAt), esc(c.title || ''), esc(c.text), esc((c.tags || []).join(';')), esc(c.url)].join(',')
     );
     return [header, ...rows].join('\n');
   }
 
-  function toMarkdown(clips) {
-    return clips
+  function toMarkdown(memos) {
+    return memos
       .map((c) => {
         const frontmatter = [
           '---',
@@ -1424,16 +1412,16 @@
     URL.revokeObjectURL(url);
   }
 
-  function exportClips(format, scope) {
-    const clips = getScopedClips(scope);
+  function exportMemos(format, scope) {
+    const memos = getScopedMemos(scope);
     const stamp = new Date().toISOString().slice(0, 10);
 
     if (format === 'json') {
-      downloadFile(`memio-export-${stamp}.json`, JSON.stringify(clips, null, 2), 'application/json');
+      downloadFile(`memio-export-${stamp}.json`, JSON.stringify(memos, null, 2), 'application/json');
     } else if (format === 'csv') {
-      downloadFile(`memio-export-${stamp}.csv`, toCSV(clips), 'text/csv');
+      downloadFile(`memio-export-${stamp}.csv`, toCSV(memos), 'text/csv');
     } else if (format === 'markdown') {
-      downloadFile(`memio-export-${stamp}.md`, toMarkdown(clips), 'text/markdown');
+      downloadFile(`memio-export-${stamp}.md`, toMarkdown(memos), 'text/markdown');
     }
   }
 
@@ -1455,7 +1443,7 @@
     confirmBtn.addEventListener('click', () => {
       const format = shadowRoot.querySelector('input[name="exportFormat"]:checked').value;
       const scope = shadowRoot.querySelector('input[name="exportScope"]:checked').value;
-      exportClips(format, scope);
+      exportMemos(format, scope);
       panel.hidden = true;
     });
   }
@@ -1500,10 +1488,10 @@
   // ---------------------------------------------------------------------
   const MEMIO_HELP_SECTIONS = [
     {
-      label: 'CLIPPING',
+      label: 'CAPTURING',
       questions: [
         {
-          q: 'How do I clip text from a page?',
+          q: 'How do I save text from a page?',
           a: 'Highlight any text on a page, then click the Memio icon in your toolbar. The text auto-populates the save field, ready to title and tag.'
         },
         {
@@ -1529,20 +1517,20 @@
       label: 'HISTORY',
       questions: [
         {
-          q: 'How do I search my clips?',
-          a: 'Open History and type in the search bar. Searches across titles, clip text, and tags in real time.'
+          q: 'How do I search my memos?',
+          a: 'Open History and type in the search bar. Searches across titles, memo text, and tags in real time.'
         },
         {
-          q: 'How do I edit a clip?',
-          a: 'Find the clip in History and click Edit. Title, body, and tags are all editable. Click Save to update.'
+          q: 'How do I edit a memo?',
+          a: 'Find the memo in History and click Edit. Title, body, and tags are all editable. Click Save to update.'
         },
         {
-          q: 'How do I delete a clip?',
-          a: 'Find the clip in History and click Delete. Permanent and cannot be undone.'
+          q: 'How do I delete a memo?',
+          a: 'Find the memo in History and click Delete. Permanent and cannot be undone.'
         },
         {
           q: 'What does Unsend do?',
-          a: 'It removes the "Sent to Obsidian" or "Sent to Notion" marker from a clip inside Memio. It does not delete the note or page from Obsidian or Notion — that stays. Useful if you want to re-send a clip somewhere after editing it.'
+          a: 'It removes the "Sent to Obsidian" or "Sent to Notion" marker from a memo inside Memio. It does not delete the note or page from Obsidian or Notion — that stays. Useful if you want to re-send a memo somewhere after editing it.'
         }
       ]
     },
@@ -1554,22 +1542,22 @@
           blocks: [
             {
               label: '"Send to"',
-              text: 'Manual and deliberate. Use when you want to send one specific clip to a chosen folder or page. Good for selective saves where the destination matters.'
+              text: 'Manual and deliberate. Use when you want to send one specific memo to a chosen folder or page. Good for selective saves where the destination matters.'
             },
             {
               label: '"Send all to"',
-              text: "Bulk manual send. Use after a clipping session to push everything at once. Respects active filters — filter by tag or time range first, then send only that subset."
+              text: "Bulk manual send. Use after a saving session to push everything at once. Respects active filters — filter by tag or time range first, then send only that subset."
             },
             {
               label: '"Auto-send"',
-              text: 'Fires every time you save a clip. Zero friction. Best paired with tag routing so clips land in the right place automatically.'
+              text: 'Fires every time you save a memo. Zero friction. Best paired with tag routing so memos land in the right place automatically.'
             }
           ],
           note: "Auto-send if you have a system. Send all to if you batch. Send to if you're being selective."
         },
         {
-          q: 'How do I export my clips?',
-          a: "Open History and click Export. Choose your format (JSON, CSV, or Markdown) and your scope (all clips, filtered view, today, this week, this month). Downloads immediately."
+          q: 'How do I export my memos?',
+          a: "Open History and click Export. Choose your format (JSON, CSV, or Markdown) and your scope (all memos, filtered view, today, this week, this month). Downloads immediately."
         }
       ]
     },
@@ -1578,7 +1566,7 @@
       questions: [
         {
           q: 'How do I connect Obsidian?',
-          a: 'Go to Settings → Connectors → Obsidian → Configure. Install the Local REST API community plugin in Obsidian, copy the API key it generates, and paste it into Memio. Obsidian must be open when sending clips.'
+          a: 'Go to Settings → Connectors → Obsidian → Configure. Install the Local REST API community plugin in Obsidian, copy the API key it generates, and paste it into Memio. Obsidian must be open when sending memos.'
         },
         {
           q: 'How do I connect Notion?',
@@ -1590,11 +1578,11 @@
         },
         {
           q: 'What is tag routing?',
-          a: 'Under each connector in Settings, you can map tags to specific folders or pages. A clip tagged "design" goes straight to your /design folder in Obsidian, for example. First matching rule wins. Unmatched clips go to your default destination. Each clip goes to one destination only. If a clip has multiple tags and more than one rule matches, the first matching rule wins. Order your rules intentionally.'
+          a: 'Under each connector in Settings, you can map tags to specific folders or pages. A memo tagged "design" goes straight to your /design folder in Obsidian, for example. First matching rule wins. Unmatched memos go to your default destination. Each memo goes to one destination only. If a memo has multiple tags and more than one rule matches, the first matching rule wins. Order your rules intentionally.'
         },
         {
-          q: 'Can I send a clip to different folders each time?',
-          a: 'Yes. Add multiple folders or pages under each connector in Settings first. Then click "Send to..." on any clip and pick your destination from the list. If you only have one destination saved, it sends there automatically with no extra click.'
+          q: 'Can I send a memo to different folders each time?',
+          a: 'Yes. Add multiple folders or pages under each connector in Settings first. Then click "Send to..." on any memo and pick your destination from the list. If you only have one destination saved, it sends there automatically with no extra click.'
         }
       ]
     },
@@ -1603,7 +1591,7 @@
       questions: [
         {
           q: 'Does Memio store my data anywhere?',
-          a: 'No. Everything stays in your browser. Clips, tags, and preferences sync across your signed-in Chrome installs via Chrome sync; connector API keys and tokens are kept device-only in local storage and never sync anywhere. No accounts, no servers, no cloud storage of any kind.'
+          a: 'No. Everything stays in your browser. Memos, tags, and preferences sync across your signed-in Chrome installs via Chrome sync; connector API keys and tokens are kept device-only in local storage and never sync anywhere. No accounts, no servers, no cloud storage of any kind.'
         },
         {
           q: 'Can I get my data out?',
@@ -1750,10 +1738,10 @@
     });
 
     async function runBulkSend(connectorId) {
-      const clips = getFilteredClips().filter((c) => !(c.sentTo || []).includes(connectorId));
+      const memos = getFilteredMemos().filter((c) => !(c.sentTo || []).includes(connectorId));
       const scopeLabel = buildScopeLabel();
       const context = scopeLabel ? { scopeLabel } : undefined;
-      const total = clips.length;
+      const total = memos.length;
       let sent = 0;
       let failed = 0;
 
@@ -1771,10 +1759,10 @@
 
       for (let i = 0; i < total; i++) {
         try {
-          await memioSendClipToConnector(connectorId, clips[i], context);
+          await memioSendMemoToConnector(connectorId, memos[i], context);
           sent++;
-          await updateClip(clips[i].id, {
-            sentTo: Array.from(new Set([...(clips[i].sentTo || []), connectorId]))
+          await updateMemo(memos[i].id, {
+            sentTo: Array.from(new Set([...(memos[i].sentTo || []), connectorId]))
           });
         } catch (err) {
           failed++;
@@ -1782,9 +1770,9 @@
         progress.textContent = `Sending ${i + 1} of ${total}...`;
       }
 
-      progress.textContent = failed === 0 ? `Done. ${sent} clips sent.` : `Done. ${sent} sent, ${failed} failed.`;
+      progress.textContent = failed === 0 ? `Done. ${sent} memos sent.` : `Done. ${sent} sent, ${failed} failed.`;
       populateFilters();
-      renderClips();
+      renderMemos();
       setTimeout(() => {
         progress.hidden = true;
       }, 4000);
@@ -1803,13 +1791,13 @@
     clearBtn.addEventListener('click', () => {
       selectedTags = [];
       populateFilters();
-      renderClips();
+      renderMemos();
     });
   }
 
   function initHistoryView() {
-    memioQ('searchInput').addEventListener('input', renderClips);
-    memioQ('timeRangeFilter').addEventListener('change', renderClips);
+    memioQ('searchInput').addEventListener('input', renderMemos);
+    memioQ('timeRangeFilter').addEventListener('change', renderMemos);
 
     initTagFilter();
     initExportPanel();
@@ -1850,27 +1838,27 @@
   function initNav() {
     const navNew = memioQ('navNew');
     const navHistory = memioQ('navHistory');
-    const clipView = memioQ('clipView');
+    const memoView = memioQ('memoView');
     const historyView = memioQ('historyView');
 
     navNew.addEventListener('click', async () => {
       navNew.classList.add('active');
       navHistory.classList.remove('active');
-      clipView.hidden = false;
+      memoView.hidden = false;
       historyView.hidden = true;
-      await updateClipCount();
+      await updateMemoCount();
     });
 
     navHistory.addEventListener('click', async () => {
       navHistory.classList.add('active');
       navNew.classList.remove('active');
-      clipView.hidden = true;
+      memoView.hidden = true;
       historyView.hidden = false;
       if (!historyLoadedOnce) {
         historyLoadedOnce = true;
         initHistoryView();
       }
-      await loadClips();
+      await loadMemos();
     });
   }
 
@@ -1993,8 +1981,8 @@
     await initSettingsPanel();
     await memioRenderConnectorSections();
     await memioRenderAiSection(memioQ('aiSection'));
-    await updateClipCount();
-    await initClipView();
+    await updateMemoCount();
+    await initMemoView();
     initTour();
     await initPostSaveFeatures();
     await checkAndStartTour();
