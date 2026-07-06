@@ -172,16 +172,12 @@
       </div>
       <p class="title-hint" id="titleHint" hidden>Add a title to save</p>
       <p class="title-hint" id="wandError" hidden></p>
-      <textarea id="memoText" class="memo-textarea" placeholder="Type or paste something worth keeping..."></textarea>
+      <textarea id="memoText" class="memo-textarea" placeholder="Type or paste anything worth keeping.
+Or highlight text on any page first — it auto-populates here when you open Memio."></textarea>
       <div class="source-url" id="sourceUrl"></div>
       <div id="tagInputField" class="tag-input"></div>
       <button type="button" class="btn-primary" id="saveBtn">Save it</button>
       <p class="saved-confirm" id="savedConfirm">Saved.</p>
-
-      <div class="empty-state-block" id="savesEmptyState" hidden>
-        <p class="empty-state">Type or paste the thought, idea, or info-bit that you don't want to lose here.</p>
-        <p class="empty-state-tip">Pro-tip: Highlight text on any page first, then click the extension icon, to auto-populate text for saving.</p>
-      </div>
     </main>
 
     <main class="history-view" id="historyView" hidden>
@@ -726,18 +722,10 @@
       wandBtn.title = ready ? 'Generate title' : 'Turn on and add an AI key in Settings to use this';
     }
 
-    function refreshSavesEmptyState() {
-      const emptyBlock = memioQ('savesEmptyState');
-      emptyBlock.hidden = titleInput.value.trim().length > 0 || textarea.value.trim().length > 0;
-    }
-
     textarea.addEventListener('input', () => {
       wandError.hidden = true;
       refreshWandButton();
-      refreshSavesEmptyState();
     });
-    titleInput.addEventListener('input', refreshSavesEmptyState);
-    refreshSavesEmptyState();
     await refreshWandButton();
 
     wandBtn.addEventListener('click', async () => {
@@ -802,7 +790,6 @@
       sourceUrlEl.textContent = url;
       sourceUrlEl.dataset.url = url;
       await refreshWandButton();
-      refreshSavesEmptyState();
 
       savedConfirm.classList.add('visible');
       setTimeout(() => savedConfirm.classList.remove('visible'), 1500);

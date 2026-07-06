@@ -1028,14 +1028,6 @@ a.btn-primary {
   padding: 0 8px;
   font-size: 13px;
 }
-.empty-state-tip {
-  font-family: 'DM Sans', sans-serif;
-  color: var(--text-muted);
-  text-align: center;
-  font-style: italic;
-  font-size: 12px;
-  margin: 0 8px;
-}
 .empty-state-block .empty-state {
   padding-bottom: 0;
 }
