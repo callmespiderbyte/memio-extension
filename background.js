@@ -43,12 +43,14 @@ chrome.runtime.onInstalled.addListener(async () => {
 
   const { connectors } = await chrome.storage.sync.get('connectors');
   if (!connectors) {
+    // Credentials (apiKey/token) intentionally aren't seeded here — they
+    // live in chrome.storage.local (see connectors.js), never .sync.
     await chrome.storage.sync.set({
       connectors: {
-        obsidian: { enabled: false, apiKey: '', folderPath: '' },
-        notion: { enabled: false, token: '', pageId: '' },
-        drive: { enabled: false, apiKey: '', folderId: '' },
-        ai: { enabled: false, provider: 'claude', apiKey: '' }
+        obsidian: { enabled: false, folders: [], tagRules: [], collation: 'individual' },
+        notion: { enabled: false, pages: [], tagRules: [], collation: 'individual' },
+        drive: { enabled: false, folderId: '' },
+        ai: { enabled: false, provider: 'claude' }
       }
     });
   }

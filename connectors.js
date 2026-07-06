@@ -1,5 +1,18 @@
 const MEMIO_CONNECTORS_KEY = 'connectors';
 
+// Credentials live in chrome.storage.local, never .sync — sync replicates
+// data to every Chrome install signed into the same Google account, which
+// is a much bigger blast radius than these API keys/tokens need. Everything
+// else (folders, tag rules, collation, enabled flags) stays in sync since
+// there's no secrecy concern and cross-device convenience is worth it.
+const MEMIO_SECRETS_KEY = 'connectors_secrets';
+const MEMIO_SECRET_FIELDS = {
+  obsidian: ['apiKey'],
+  notion: ['token'],
+  drive: ['apiKey'],
+  ai: ['apiKey']
+};
+
 const MEMIO_CONNECTOR_DEFAULTS = {
   obsidian: { enabled: false, apiKey: '', folders: [], tagRules: [], collation: 'individual' },
   notion: { enabled: false, token: '', pages: [], tagRules: [], collation: 'individual' },
@@ -80,33 +93,71 @@ const MEMIO_CONNECTOR_DEFS = [
   }
 ];
 
-// Guards the one-time folderPath/pageId → folders/pages migration below so
-// it only ever writes once per page load, not on every memioGetConnectors()
-// call (this function runs constantly — on every render, every send).
+// Guards the one-time folderPath/pageId migration and the sync→local
+// secrets migration below so they only ever write once per page load, not
+// on every memioGetConnectors() call (this function runs constantly — on
+// every render, every send).
 let memioLegacyDestinationsMigrated = false;
 
 async function memioGetConnectors() {
   const { connectors } = await chrome.storage.sync.get(MEMIO_CONNECTORS_KEY);
+  const { connectors_secrets } = await chrome.storage.local.get(MEMIO_SECRETS_KEY);
+
   const merged = {};
   Object.keys(MEMIO_CONNECTOR_DEFAULTS).forEach((id) => {
-    merged[id] = Object.assign({}, MEMIO_CONNECTOR_DEFAULTS[id], connectors && connectors[id]);
+    merged[id] = Object.assign(
+      {},
+      MEMIO_CONNECTOR_DEFAULTS[id],
+      connectors && connectors[id],
+      connectors_secrets && connectors_secrets[id]
+    );
   });
 
   if (!memioLegacyDestinationsMigrated) {
     memioLegacyDestinationsMigrated = true;
-    let changed = false;
+    let syncChanged = false;
+    let secretsChanged = false;
+    const secretsPatch = {};
 
     if (merged.obsidian.folderPath && (!merged.obsidian.folders || merged.obsidian.folders.length === 0)) {
       merged.obsidian.folders = [merged.obsidian.folderPath];
-      changed = true;
+      syncChanged = true;
     }
     if (merged.notion.pageId && (!merged.notion.pages || merged.notion.pages.length === 0)) {
       merged.notion.pages = [{ id: merged.notion.pageId, title: 'Default', type: 'database' }];
-      changed = true;
+      syncChanged = true;
     }
 
-    if (changed) {
-      await chrome.storage.sync.set({ connectors: merged });
+    // Move any credential fields still sitting in sync storage (from before
+    // secrets were split out into storage.local) over to local, and strip
+    // them out of what gets written back to sync.
+    Object.keys(MEMIO_SECRET_FIELDS).forEach((connectorId) => {
+      const syncEntry = connectors && connectors[connectorId];
+      if (!syncEntry) return;
+      MEMIO_SECRET_FIELDS[connectorId].forEach((field) => {
+        if (syncEntry[field]) {
+          secretsPatch[connectorId] = Object.assign({}, secretsPatch[connectorId], { [field]: syncEntry[field] });
+          secretsChanged = true;
+          syncChanged = true;
+        }
+      });
+    });
+
+    if (syncChanged) {
+      const syncOnly = {};
+      Object.keys(merged).forEach((connectorId) => {
+        const entry = Object.assign({}, merged[connectorId]);
+        (MEMIO_SECRET_FIELDS[connectorId] || []).forEach((field) => delete entry[field]);
+        syncOnly[connectorId] = entry;
+      });
+      await chrome.storage.sync.set({ connectors: syncOnly });
+    }
+    if (secretsChanged) {
+      const merged2 = Object.assign({}, connectors_secrets);
+      Object.keys(secretsPatch).forEach((connectorId) => {
+        merged2[connectorId] = Object.assign({}, merged2[connectorId], secretsPatch[connectorId]);
+      });
+      await chrome.storage.local.set({ connectors_secrets: merged2 });
     }
   }
 
@@ -116,7 +167,25 @@ async function memioGetConnectors() {
 async function memioPatchConnector(id, patch) {
   const connectors = await memioGetConnectors();
   connectors[id] = Object.assign({}, connectors[id], patch);
-  await chrome.storage.sync.set({ connectors });
+
+  const secretFields = MEMIO_SECRET_FIELDS[id] || [];
+  const syncEntry = Object.assign({}, connectors[id]);
+  const secretEntry = {};
+  secretFields.forEach((field) => {
+    secretEntry[field] = syncEntry[field];
+    delete syncEntry[field];
+  });
+
+  const { connectors: currentSync } = await chrome.storage.sync.get(MEMIO_CONNECTORS_KEY);
+  await chrome.storage.sync.set({ connectors: Object.assign({}, currentSync, { [id]: syncEntry }) });
+
+  if (secretFields.length) {
+    const { connectors_secrets } = await chrome.storage.local.get(MEMIO_SECRETS_KEY);
+    await chrome.storage.local.set({
+      connectors_secrets: Object.assign({}, connectors_secrets, { [id]: secretEntry })
+    });
+  }
+
   return connectors;
 }
 

@@ -6,11 +6,24 @@
 //
 // Root-query helpers: this file used to run inside the popup's own document,
 // so `document.getElementById` was always correct. Now it runs inside a
-// shadow root injected into an arbitrary host page — window.__memioRoot
-// (set by content.js once the shadow root exists) is queried instead, with
+// shadow root injected into an arbitrary host page — memioRootRef (set by
+// content.js once the shadow root exists) is queried instead, with
 // `document` only as a pre-injection fallback so nothing throws.
+//
+// Deliberately a plain `var`, never `window.memioRootRef` — content scripts
+// in the same manifest entry share one isolated-world global object, so a
+// top-level `var` here is already visible to connectors.js/content.js
+// without needing to touch the actual page `window`. Attaching this to
+// `window` instead (as an earlier version did) would hand the host page's
+// own scripts a live reference into the extension's shadow DOM, including
+// every credential input's value the moment Settings/Connectors renders —
+// on every site the extension is opened on, not just malicious ones the
+// user might expect to be careful around.
+var memioRootRef = null;
+var memioHostRef = null;
+
 function memioRoot() {
-  return window.__memioRoot || document;
+  return memioRootRef || document;
 }
 function memioQ(id) {
   return memioRoot().getElementById(id);
@@ -37,7 +50,7 @@ const MEMIO_ACCENTS = [
 const MEMIO_DEFAULT_ACCENT_NAME = 'yellow';
 
 function applyAccentAndTheme(accentName, theme, colourMode) {
-  const host = window.__memioHost;
+  const host = memioHostRef;
   if (!host) return;
   host.dataset.accent = accentName;
   if (theme === 'dark' || theme === 'light') {

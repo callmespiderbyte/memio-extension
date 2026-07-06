@@ -6,6 +6,9 @@
 (function () {
   const MEMIO_CLIPS_KEY = 'memio_clips';
   const MEMIO_DRAFT_KEY = 'memio_draft';
+  // Single source of truth is manifest.json — reading it here means the
+  // footer can never drift out of sync with the actual installed version.
+  const MEMIO_VERSION = chrome.runtime.getManifest().version;
 
   let hostEl = null;
   let shadowRoot = null;
@@ -249,6 +252,8 @@
       </div>
     </main>
   </div>
+
+  <p class="version-tag">v${MEMIO_VERSION}</p>
 
   <div class="settings-overlay" id="settingsOverlay" hidden>
   <div class="settings-panel">
@@ -1598,7 +1603,7 @@
       questions: [
         {
           q: 'Does Memio store my data anywhere?',
-          a: 'No. Everything stays in your browser via Chrome sync. No accounts, no servers, no cloud storage of any kind.'
+          a: 'No. Everything stays in your browser. Clips, tags, and preferences sync across your signed-in Chrome installs via Chrome sync; connector API keys and tokens are kept device-only in local storage and never sync anywhere. No accounts, no servers, no cloud storage of any kind.'
         },
         {
           q: 'Can I get my data out?',
@@ -1965,9 +1970,12 @@
     hostEl.style.cssText = 'position: static; width: 0; height: 0; overflow: visible;';
     document.documentElement.appendChild(hostEl);
 
-    shadowRoot = hostEl.attachShadow({ mode: 'open' });
-    window.__memioRoot = shadowRoot;
-    window.__memioHost = hostEl;
+    // 'closed' means `hostEl.shadowRoot` is null from the page's own
+    // scripts — the extension keeps its own reference via the return value
+    // here (the `shadowRoot` closure variable), which is all it ever uses.
+    shadowRoot = hostEl.attachShadow({ mode: 'closed' });
+    memioRootRef = shadowRoot;
+    memioHostRef = hostEl;
 
     await Promise.all([injectFonts(shadowRoot), injectAppStyles(shadowRoot)]);
 
