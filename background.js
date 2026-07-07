@@ -87,11 +87,28 @@ async function updateBadge() {
   await chrome.action.setBadgeBackgroundColor({ color: '#888580' });
 }
 
+// Per-tab (not global) so a failure on one restricted tab doesn't paint
+// every other tab's icon with the same warning.
+async function markTabUnsupported(tabId) {
+  await chrome.action.setBadgeText({ tabId, text: '!' });
+  await chrome.action.setBadgeBackgroundColor({ tabId, color: '#C0392B' });
+  await chrome.action.setTitle({ tabId, title: "Memio can't run on this page" });
+}
+
+// Clears a previously-set per-tab override (empty string reverts to the
+// global badge/title rather than just hiding it) — needed so the "!"
+// doesn't linger if the user navigates that same tab to a normal page.
+async function clearTabUnsupported(tabId) {
+  await chrome.action.setBadgeText({ tabId, text: '' });
+  await chrome.action.setTitle({ tabId, title: '' });
+}
+
 chrome.action.onClicked.addListener(async (tab) => {
   if (!tab.id) return;
 
   try {
     await chrome.tabs.sendMessage(tab.id, { type: 'MEMIO_TOGGLE_WINDOW' });
+    await clearTabUnsupported(tab.id);
     return;
   } catch (e) {
     // Content scripts aren't retroactively injected into tabs that were
@@ -101,8 +118,10 @@ chrome.action.onClicked.addListener(async (tab) => {
   try {
     await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: MEMIO_CONTENT_FILES });
     await chrome.tabs.sendMessage(tab.id, { type: 'MEMIO_TOGGLE_WINDOW' });
+    await clearTabUnsupported(tab.id);
   } catch (e) {
     // Some pages (chrome://, the Web Store, etc.) can't be scripted at all —
-    // nothing we can do there.
+    // let the user know why nothing happened instead of failing silently.
+    await markTabUnsupported(tab.id);
   }
 });

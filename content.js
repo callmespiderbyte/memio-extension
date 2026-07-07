@@ -113,11 +113,20 @@
   }
 
   async function injectAppStyles(root) {
-    const res = await fetch(chrome.runtime.getURL('styles.css'));
-    const cssText = await res.text();
-    const style = document.createElement('style');
-    style.textContent = cssText;
-    root.appendChild(style);
+    try {
+      const res = await fetch(chrome.runtime.getURL('styles.css'));
+      const cssText = await res.text();
+      const style = document.createElement('style');
+      style.textContent = cssText;
+      root.appendChild(style);
+    } catch (e) {
+      // A failed fetch here used to reject the whole Promise.all in
+      // createWindow() and abort window creation entirely — so on any site
+      // where this one request failed for any reason, the toolbar icon
+      // would appear to do nothing at all. Rendering unstyled rather than
+      // not rendering at all is a strictly better failure mode.
+      console.error('[MEMIO] Failed to load styles.css:', e);
+    }
   }
 
   function memioEmptyHistoryIllustration() {
@@ -971,8 +980,10 @@ Or highlight text on any page first — it auto-populates here when you open Mem
         shadowRoot.removeEventListener('click', handler, true);
       }
     };
-    // Deferred so the click that opened the popover doesn't immediately close it.
-    setTimeout(() => shadowRoot.addEventListener('click', handler, true), 0);
+    // Deferred so the click that opened the popover doesn't immediately
+    // close it, and to avoid registering before the window's own click
+    // handling is fully wired up on slow pages.
+    setTimeout(() => shadowRoot.addEventListener('click', handler, true), 50);
   }
 
   function showEmptyDestinationPopover(wrap, connectorId) {
@@ -1919,25 +1930,32 @@ Or highlight text on any page first — it auto-populates here when you open Mem
       e.preventDefault();
     });
 
-    document.addEventListener('mousemove', (e) => {
-      if (!dragging) return;
-      const dx = e.clientX - startX;
-      const dy = e.clientY - startY;
-      const maxLeft = window.innerWidth - win.offsetWidth;
-      const maxTop = window.innerHeight - win.offsetHeight;
-      const newLeft = Math.max(0, Math.min(maxLeft, startLeft + dx));
-      const newTop = Math.max(0, Math.min(maxTop, startTop + dy));
-      win.style.left = `${newLeft}px`;
-      win.style.top = `${newTop}px`;
-    });
+    // Attaching these a beat after window injection, rather than
+    // synchronously, avoids a race on slow-loading pages where a
+    // document-level listener could end up registered (and start reacting
+    // to events) before the window's own click handlers above it in this
+    // function are fully wired up.
+    setTimeout(() => {
+      document.addEventListener('mousemove', (e) => {
+        if (!dragging) return;
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+        const maxLeft = window.innerWidth - win.offsetWidth;
+        const maxTop = window.innerHeight - win.offsetHeight;
+        const newLeft = Math.max(0, Math.min(maxLeft, startLeft + dx));
+        const newTop = Math.max(0, Math.min(maxTop, startTop + dy));
+        win.style.left = `${newLeft}px`;
+        win.style.top = `${newTop}px`;
+      });
 
-    document.addEventListener('mouseup', async () => {
-      if (!dragging) return;
-      dragging = false;
-      header.classList.remove('grabbing');
-      const rect = win.getBoundingClientRect();
-      await chrome.storage.sync.set({ windowPosition: { x: rect.left, y: rect.top } });
-    });
+      document.addEventListener('mouseup', async () => {
+        if (!dragging) return;
+        dragging = false;
+        header.classList.remove('grabbing');
+        const rect = win.getBoundingClientRect();
+        await chrome.storage.sync.set({ windowPosition: { x: rect.left, y: rect.top } });
+      });
+    }, 50);
   }
 
   // ---------------------------------------------------------------------
@@ -1962,9 +1980,35 @@ Or highlight text on any page first — it auto-populates here when you open Mem
 
     await Promise.all([injectFonts(shadowRoot), injectAppStyles(shadowRoot)]);
 
-    const wrapper = document.createElement('div');
-    wrapper.innerHTML = buildMarkup();
-    while (wrapper.firstChild) shadowRoot.appendChild(wrapper.firstChild);
+    // Sites that set a Trusted Types CSP (require-trusted-types-for
+    // 'script') throw on any innerHTML assignment into the live page
+    // document — including from a content script, since enforcement is
+    // per-document, not per-script-origin. That's a real, well-known cause
+    // of "this extension works on most sites but silently breaks on a few"
+    // bugs. Parsing into a standalone DOMParser document sidesteps it
+    // entirely: that document was never attached to the page, so the
+    // page's Trusted Types policy never applies to it.
+    const parsed = new DOMParser().parseFromString(buildMarkup(), 'text/html');
+    Array.from(parsed.body.childNodes).forEach((node) => {
+      shadowRoot.appendChild(document.importNode(node, true));
+    });
+
+    // Some host pages have their own "click outside closes this" logic for
+    // their own overlays/dropdowns (listening on click or mousedown at the
+    // document level) that can end up reacting to clicks that originated
+    // inside our injected window, since those events still bubble/compose
+    // out of the shadow tree into the page's own document. Stopping
+    // propagation here means the only things that can ever close this
+    // window are the explicit triggers below (the × button and re-clicking
+    // the toolbar icon) — never anything the host page's own JS does.
+    // mouseup is deliberately excluded: the drag-to-reposition feature
+    // below relies on a document-level mouseup listener to finalize a
+    // drag, which would never fire if stopped here first.
+    const windowEl = memioQ('memioWindow');
+    if (windowEl) {
+      windowEl.addEventListener('click', (e) => e.stopPropagation());
+      windowEl.addEventListener('mousedown', (e) => e.stopPropagation());
+    }
 
     memioQ('closeWindowBtn').addEventListener('click', hideWindow);
     initInfoOverlays();
