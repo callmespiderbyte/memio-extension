@@ -112,7 +112,10 @@ chrome.action.onClicked.addListener(async (tab) => {
     return;
   } catch (e) {
     // Content scripts aren't retroactively injected into tabs that were
-    // already open before install/reload — fall back to injecting them now.
+    // already open before install/reload (or the previous injection's
+    // listener is gone for some other reason) — fall back to injecting a
+    // fresh copy now rather than giving up.
+    console.error('[MEMIO] sendMessage failed, falling back to executeScript:', e);
   }
 
   try {
@@ -122,6 +125,7 @@ chrome.action.onClicked.addListener(async (tab) => {
   } catch (e) {
     // Some pages (chrome://, the Web Store, etc.) can't be scripted at all —
     // let the user know why nothing happened instead of failing silently.
+    console.error('[MEMIO] executeScript fallback also failed:', e);
     await markTabUnsupported(tab.id);
   }
 });

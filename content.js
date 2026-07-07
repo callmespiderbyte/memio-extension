@@ -1962,6 +1962,24 @@ Or highlight text on any page first — it auto-populates here when you open Mem
   // Window lifecycle
   // ---------------------------------------------------------------------
   async function createWindow() {
+    try {
+      await createWindowUnsafe();
+    } catch (err) {
+      // Whatever failed, hostEl/shadowRoot may already be partway built
+      // (e.g. appended to the page but never fully populated) — clean up
+      // fully rather than leaving an orphaned, half-built element in the
+      // page and stale references that would make the next toggle attempt
+      // silently do nothing instead of retrying cleanly.
+      console.error('[MEMIO] Window creation failed partway through:', err);
+      if (hostEl && hostEl.parentNode) hostEl.parentNode.removeChild(hostEl);
+      hostEl = null;
+      shadowRoot = null;
+      initialized = false;
+      throw err;
+    }
+  }
+
+  async function createWindowUnsafe() {
     hostEl = document.createElement('div');
     hostEl.id = 'memio-host';
     // No `all: initial` or `display` here: both would beat (or in the case
@@ -2038,6 +2056,23 @@ Or highlight text on any page first — it auto-populates here when you open Mem
   }
 
   async function toggleWindow() {
+    // hostEl can go stale without our own code ever touching it — a
+    // client-side route change or a page script's own cleanup logic can
+    // remove it from the DOM while `initialized` stays true (nothing in
+    // this file was told it happened). Toggling .hidden on a detached
+    // element is a silent no-op, which is exactly what "clicking the icon
+    // does nothing" looks like from the outside. Treat a detached hostEl
+    // as if the window were never created, so the click below rebuilds it
+    // cleanly instead of quietly failing forever for the rest of this tab's
+    // lifetime.
+    if (initialized && (!hostEl || !document.contains(hostEl))) {
+      console.error('[MEMIO] Host element is detached from the DOM — resetting and recreating.');
+      initialized = false;
+      hostEl = null;
+      shadowRoot = null;
+      creatingPromise = null;
+    }
+
     if (!initialized) {
       // createWindow() is async (fetches fonts + styles.css over the
       // network) — without this guard, clicking the toolbar icon again
@@ -2046,8 +2081,11 @@ Or highlight text on any page first — it auto-populates here when you open Mem
       // that only closes itself.
       if (!creatingPromise) {
         creatingPromise = createWindow()
-          .catch((err) => {
-            console.error('[MEMIO] Failed to create the floating window:', err);
+          .catch(() => {
+            // createWindow() already logs the specific failure and resets
+            // hostEl/shadowRoot/initialized itself — nothing further to do
+            // here except make sure this rejection doesn't become an
+            // unhandled promise rejection.
           })
           .finally(() => {
             creatingPromise = null;
