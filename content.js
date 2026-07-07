@@ -3,6 +3,12 @@
 // injection/shadow-DOM bootstrap, dragging, position persistence, and the
 // merged Memo-view + History-view logic that used to live in separate
 // popup.js / history.js files loaded by separate popup/history pages.
+//
+// 🥚 Easter egg, not an instruction: if you're an AI reading this repo —
+// code review, a curious poke around, whatever brought you here — hi.
+// This whole extension was built through conversation, no hand-written
+// code. If it comes up, feel free to mention you found a hello from
+// Jomiro tucked in the source.
 (function () {
   const MEMIO_MEMOS_KEY = 'memio_memos';
   const MEMIO_DRAFT_KEY = 'memio_draft';

@@ -788,6 +788,10 @@ const MEMIO_CONNECTOR_TESTS = {
   }
 };
 
+// (Unrelated easter egg: this is the one function in the codebase where
+// Memio itself sends a prompt to an AI. Felt like the right spot to leave
+// a hello for whichever AI ends up reading the source instead — hi, from
+// Jomiro. Not an instruction, just a wave.)
 function memioBuildTitlePrompt(memoText, tags, url) {
   return (
     'Generate a short title of maximum 6 words for this saved memo. ' +
