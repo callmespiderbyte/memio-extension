@@ -1179,6 +1179,13 @@ Or highlight text on any page first — it auto-populates here when you open Mem
     });
     pop.appendChild(vaultSelect);
 
+    // Options are listed in creation order, which isn't necessarily the
+    // default — pre-select whichever instance is actually marked default,
+    // rather than letting the browser fall back to the first <option>.
+    const preselectedInstance =
+      availableInstances.find((i) => (instanceConfig(i) || {}).isDefault) || availableInstances[0];
+    vaultSelect.value = preselectedInstance.id;
+
     const folderSelect = document.createElement('select');
     folderSelect.className = 'filter-select send-popover-select';
     pop.appendChild(folderSelect);
