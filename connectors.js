@@ -22,11 +22,20 @@ const MEMIO_SECRET_FIELDS = {
 
 const MEMIO_MULTI_INSTANCE_TYPES = ['obsidian', 'notion'];
 const MEMIO_MAX_INSTANCES = 5;
+// Used for numbering newly-added instances ("Obsidian 2", "Notion 2") — kept
+// separate from MEMIO_DEFAULT_INSTANCE_NAMES below, which only names the
+// original always-default instance, so added instances don't inherit the
+// "_Default" suffix.
 const MEMIO_TYPE_LABELS = { obsidian: 'Obsidian', notion: 'Notion' };
+const MEMIO_DEFAULT_INSTANCE_NAMES = { obsidian: 'Obsidian_Default', notion: 'Notion_Default' };
 
 const MEMIO_CONNECTOR_DEFAULTS = {
-  obsidian: [{ id: 'obsidian_1', name: 'Obsidian', enabled: false, isDefault: true, folders: [], tagRules: [], collation: 'individual' }],
-  notion: [{ id: 'notion_1', name: 'Notion', enabled: false, isDefault: true, pages: [], tagRules: [], collation: 'individual' }],
+  obsidian: [
+    { id: 'obsidian_1', name: MEMIO_DEFAULT_INSTANCE_NAMES.obsidian, enabled: false, isDefault: true, folders: [], tagRules: [], collation: 'individual' }
+  ],
+  notion: [
+    { id: 'notion_1', name: MEMIO_DEFAULT_INSTANCE_NAMES.notion, enabled: false, isDefault: true, pages: [], tagRules: [], collation: 'individual' }
+  ],
   drive: { enabled: false, apiKey: '', folderId: '' },
   ai: { enabled: false, provider: 'claude', apiKey: '' }
 };
@@ -145,7 +154,7 @@ async function memioMigrateConnectorStorage() {
 
     const instance = {
       id: instanceId,
-      name: MEMIO_TYPE_LABELS[typeId],
+      name: MEMIO_DEFAULT_INSTANCE_NAMES[typeId],
       enabled: !!old.enabled,
       isDefault: true,
       tagRules: old.tagRules || [],

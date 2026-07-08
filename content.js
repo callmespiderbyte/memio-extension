@@ -32,6 +32,16 @@
   // on a full window/page reload, never touches chrome.storage.
   let destinationPreviewOverride = null;
 
+  // Full rebuild of the New-view destination preview (re-checks auto-send,
+  // re-fetches enabled instances, rebuilds the vault/folder <select>s from
+  // scratch) — set once initMemoView() defines it. Settings (enabling a
+  // newly-added vault, changing the default, flipping auto-send) are only
+  // ever edited from inside the Settings overlay, which sits on top of
+  // whichever view was already open — so the preview built at window-open
+  // time can go stale until something re-runs this. Called both when the
+  // Settings overlay closes and whenever the New tab is (re)selected.
+  let refreshDestinationPreviewFull = null;
+
   // Captured synchronously the instant this script is injected — before any
   // shadow-DOM setup, network fetches (fonts/styles.css), or other init
   // work runs. initMemoView() reads highlighted text from this, not a fresh
@@ -844,7 +854,10 @@ Or highlight text on any page first — it auto-populates here when you open Mem
       refreshDestinationPreview = () => refreshFolder(false);
     }
 
+    refreshDestinationPreviewFull = initDestinationPreview;
     await initDestinationPreview();
+    const settingsCloseBtn = memioQ('closeSettingsBtn');
+    if (settingsCloseBtn) settingsCloseBtn.addEventListener('click', initDestinationPreview);
 
     function clearTitleInvalid() {
       titleInput.classList.remove('invalid');
@@ -2052,6 +2065,7 @@ Or highlight text on any page first — it auto-populates here when you open Mem
       memoView.hidden = false;
       historyView.hidden = true;
       await updateMemoCount();
+      if (refreshDestinationPreviewFull) await refreshDestinationPreviewFull();
     });
 
     navHistory.addEventListener('click', async () => {
