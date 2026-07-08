@@ -5,6 +5,13 @@ const MEMIO_CONNECTORS_KEY = 'connectors';
 // is a much bigger blast radius than these API keys/tokens need. Everything
 // else (folders, tag rules, collation, enabled flags) stays in sync since
 // there's no secrecy concern and cross-device convenience is worth it.
+//
+// Obsidian and Notion support multiple named instances (e.g. two Obsidian
+// vaults) — connectors.obsidian/.notion are arrays of instance objects, each
+// with its own id ("obsidian_1", "obsidian_2", ...). Credentials for those
+// live in connectors_secrets keyed by INSTANCE id, not connector type.
+// Google Drive and AI stay single-instance (plain objects), keyed by their
+// own connector id as before.
 const MEMIO_SECRETS_KEY = 'connectors_secrets';
 const MEMIO_SECRET_FIELDS = {
   obsidian: ['apiKey'],
@@ -13,12 +20,20 @@ const MEMIO_SECRET_FIELDS = {
   ai: ['apiKey']
 };
 
+const MEMIO_MULTI_INSTANCE_TYPES = ['obsidian', 'notion'];
+const MEMIO_MAX_INSTANCES = 5;
+const MEMIO_TYPE_LABELS = { obsidian: 'Obsidian', notion: 'Notion' };
+
 const MEMIO_CONNECTOR_DEFAULTS = {
-  obsidian: { enabled: false, apiKey: '', folders: [], tagRules: [], collation: 'individual' },
-  notion: { enabled: false, token: '', pages: [], tagRules: [], collation: 'individual' },
+  obsidian: [{ id: 'obsidian_1', name: 'Obsidian', enabled: false, isDefault: true, folders: [], tagRules: [], collation: 'individual' }],
+  notion: [{ id: 'notion_1', name: 'Notion', enabled: false, isDefault: true, pages: [], tagRules: [], collation: 'individual' }],
   drive: { enabled: false, apiKey: '', folderId: '' },
   ai: { enabled: false, provider: 'claude', apiKey: '' }
 };
+
+function memioIsMultiInstance(typeId) {
+  return MEMIO_MULTI_INSTANCE_TYPES.includes(typeId);
+}
 
 const MEMIO_AI_PROVIDERS = [
   { id: 'claude', label: 'Claude (Anthropic)' },
@@ -39,6 +54,7 @@ const MEMIO_CONNECTOR_DEFS = [
   {
     id: 'obsidian',
     name: 'Obsidian',
+    instanceNoun: 'Vault',
     title: 'Connect Obsidian',
     intro: "You'll need the Local REST API community plugin installed in Obsidian.",
     steps: [
@@ -63,6 +79,7 @@ const MEMIO_CONNECTOR_DEFS = [
   {
     id: 'notion',
     name: 'Notion',
+    instanceNoun: 'Workspace',
     title: 'Connect Notion',
     intro: "You'll need to create a Notion integration and share a database with it.",
     steps: [
@@ -93,77 +110,121 @@ const MEMIO_CONNECTOR_DEFS = [
   }
 ];
 
-// Guards the one-time folderPath/pageId migration and the sync→local
-// secrets migration below so they only ever write once per page load, not
-// on every memioGetConnectors() call (this function runs constantly — on
-// every render, every send).
-let memioLegacyDestinationsMigrated = false;
+// Guards the one-time migration below so it only ever writes once per page
+// load, not on every memioGetConnectors() call (this function runs
+// constantly — on every render, every send).
+let memioMigrationDone = false;
+
+// Folds together every migration this connector schema has ever needed:
+// folderPath/pageId → folders/pages (pre-multi-destination), credentials
+// sync → local (pre-secrets-split), and single-object → array-of-instances
+// (this feature). Each only actually does anything if the OLD shape is
+// still found, so re-running this against already-migrated data is a
+// harmless no-op.
+async function memioMigrateConnectorStorage() {
+  if (memioMigrationDone) return;
+  memioMigrationDone = true;
+
+  const { connectors } = await chrome.storage.sync.get(MEMIO_CONNECTORS_KEY);
+  if (!connectors) return;
+  const { connectors_secrets } = await chrome.storage.local.get(MEMIO_SECRETS_KEY);
+
+  let syncChanged = false;
+  let secretsChanged = false;
+  const newConnectors = Object.assign({}, connectors);
+  const newSecrets = Object.assign({}, connectors_secrets);
+
+  MEMIO_MULTI_INSTANCE_TYPES.forEach((typeId) => {
+    const existing = connectors[typeId];
+    if (Array.isArray(existing)) return; // already on the instances schema
+
+    const old = existing || {};
+    const secretField = MEMIO_SECRET_FIELDS[typeId][0];
+    const instanceId = `${typeId}_1`;
+    const destKey = typeId === 'obsidian' ? 'folders' : 'pages';
+
+    const instance = {
+      id: instanceId,
+      name: MEMIO_TYPE_LABELS[typeId],
+      enabled: !!old.enabled,
+      isDefault: true,
+      tagRules: old.tagRules || [],
+      collation: old.collation || 'individual',
+      [destKey]: old[destKey] || []
+    };
+
+    if (typeId === 'obsidian' && old.folderPath && instance.folders.length === 0) {
+      instance.folders = [old.folderPath];
+    }
+    if (typeId === 'notion' && old.pageId && instance.pages.length === 0) {
+      instance.pages = [{ id: old.pageId, title: 'Default', type: 'database' }];
+    }
+
+    // The secret could be sitting in the old sync object (pre secrets-split)
+    // or already in connectors_secrets[typeId] (post secrets-split, pre
+    // instances) — check both, land it on connectors_secrets[instanceId].
+    const secretValue = (connectors_secrets && connectors_secrets[typeId] && connectors_secrets[typeId][secretField]) || old[secretField];
+    if (secretValue) {
+      newSecrets[instanceId] = Object.assign({}, newSecrets[instanceId], { [secretField]: secretValue });
+      secretsChanged = true;
+    }
+    delete newSecrets[typeId];
+
+    newConnectors[typeId] = [instance];
+    syncChanged = true;
+  });
+
+  if (syncChanged) await chrome.storage.sync.set({ connectors: newConnectors });
+  if (secretsChanged) await chrome.storage.local.set({ connectors_secrets: newSecrets });
+}
+
+// Defensive normalization for the "exactly one default at all times"
+// invariant — mutates the given in-memory array (read-time only; doesn't
+// persist). Every write path (add/remove/setDefault) is also responsible
+// for maintaining this correctly, so this is a safety net for state that
+// predates the invariant, not the primary enforcement mechanism.
+function memioEnsureSingleDefault(instances) {
+  if (!instances.length) return;
+  if (instances.filter((i) => i.isDefault).length === 1) return;
+  instances.forEach((inst, idx) => {
+    inst.isDefault = idx === 0;
+  });
+}
 
 async function memioGetConnectors() {
+  await memioMigrateConnectorStorage();
+
   const { connectors } = await chrome.storage.sync.get(MEMIO_CONNECTORS_KEY);
   const { connectors_secrets } = await chrome.storage.local.get(MEMIO_SECRETS_KEY);
 
   const merged = {};
-  Object.keys(MEMIO_CONNECTOR_DEFAULTS).forEach((id) => {
-    merged[id] = Object.assign(
-      {},
-      MEMIO_CONNECTOR_DEFAULTS[id],
-      connectors && connectors[id],
-      connectors_secrets && connectors_secrets[id]
-    );
+  Object.keys(MEMIO_CONNECTOR_DEFAULTS).forEach((typeId) => {
+    if (memioIsMultiInstance(typeId)) {
+      const destKey = typeId === 'obsidian' ? 'folders' : 'pages';
+      const stored = Array.isArray(connectors && connectors[typeId]) ? connectors[typeId] : MEMIO_CONNECTOR_DEFAULTS[typeId];
+      merged[typeId] = stored.map((inst) =>
+        Object.assign(
+          { enabled: false, isDefault: false, tagRules: [], collation: 'individual', [destKey]: [] },
+          inst,
+          connectors_secrets && connectors_secrets[inst.id]
+        )
+      );
+      memioEnsureSingleDefault(merged[typeId]);
+    } else {
+      merged[typeId] = Object.assign(
+        {},
+        MEMIO_CONNECTOR_DEFAULTS[typeId],
+        connectors && connectors[typeId],
+        connectors_secrets && connectors_secrets[typeId]
+      );
+    }
   });
-
-  if (!memioLegacyDestinationsMigrated) {
-    memioLegacyDestinationsMigrated = true;
-    let syncChanged = false;
-    let secretsChanged = false;
-    const secretsPatch = {};
-
-    if (merged.obsidian.folderPath && (!merged.obsidian.folders || merged.obsidian.folders.length === 0)) {
-      merged.obsidian.folders = [merged.obsidian.folderPath];
-      syncChanged = true;
-    }
-    if (merged.notion.pageId && (!merged.notion.pages || merged.notion.pages.length === 0)) {
-      merged.notion.pages = [{ id: merged.notion.pageId, title: 'Default', type: 'database' }];
-      syncChanged = true;
-    }
-
-    // Move any credential fields still sitting in sync storage (from before
-    // secrets were split out into storage.local) over to local, and strip
-    // them out of what gets written back to sync.
-    Object.keys(MEMIO_SECRET_FIELDS).forEach((connectorId) => {
-      const syncEntry = connectors && connectors[connectorId];
-      if (!syncEntry) return;
-      MEMIO_SECRET_FIELDS[connectorId].forEach((field) => {
-        if (syncEntry[field]) {
-          secretsPatch[connectorId] = Object.assign({}, secretsPatch[connectorId], { [field]: syncEntry[field] });
-          secretsChanged = true;
-          syncChanged = true;
-        }
-      });
-    });
-
-    if (syncChanged) {
-      const syncOnly = {};
-      Object.keys(merged).forEach((connectorId) => {
-        const entry = Object.assign({}, merged[connectorId]);
-        (MEMIO_SECRET_FIELDS[connectorId] || []).forEach((field) => delete entry[field]);
-        syncOnly[connectorId] = entry;
-      });
-      await chrome.storage.sync.set({ connectors: syncOnly });
-    }
-    if (secretsChanged) {
-      const merged2 = Object.assign({}, connectors_secrets);
-      Object.keys(secretsPatch).forEach((connectorId) => {
-        merged2[connectorId] = Object.assign({}, merged2[connectorId], secretsPatch[connectorId]);
-      });
-      await chrome.storage.local.set({ connectors_secrets: merged2 });
-    }
-  }
 
   return merged;
 }
 
+// Single-instance connectors only (drive, ai) — obsidian/notion go through
+// memioPatchConnectorInstance below.
 async function memioPatchConnector(id, patch) {
   const connectors = await memioGetConnectors();
   connectors[id] = Object.assign({}, connectors[id], patch);
@@ -189,14 +250,128 @@ async function memioPatchConnector(id, patch) {
   return connectors;
 }
 
+async function memioPatchConnectorInstance(typeId, instanceId, patch) {
+  const connectors = await memioGetConnectors();
+  const instances = connectors[typeId] || [];
+  const idx = instances.findIndex((i) => i.id === instanceId);
+  if (idx === -1) return connectors;
+
+  const updated = Object.assign({}, instances[idx], patch);
+  const secretField = MEMIO_SECRET_FIELDS[typeId][0];
+  const syncInstance = Object.assign({}, updated);
+  const secretValue = syncInstance[secretField];
+  delete syncInstance[secretField];
+
+  const updatedInstances = instances.slice();
+  updatedInstances[idx] = syncInstance;
+
+  const { connectors: currentSync } = await chrome.storage.sync.get(MEMIO_CONNECTORS_KEY);
+  await chrome.storage.sync.set({ connectors: Object.assign({}, currentSync, { [typeId]: updatedInstances }) });
+
+  if (secretValue !== undefined) {
+    const { connectors_secrets } = await chrome.storage.local.get(MEMIO_SECRETS_KEY);
+    await chrome.storage.local.set({
+      connectors_secrets: Object.assign({}, connectors_secrets, {
+        [instanceId]: Object.assign({}, connectors_secrets && connectors_secrets[instanceId], { [secretField]: secretValue })
+      })
+    });
+  }
+
+  return memioGetConnectors();
+}
+
+// Next instance number always increments past the highest ever used for
+// this type, rather than reusing a freed number from a deleted instance —
+// simpler and avoids any chance of a stale reference elsewhere resolving to
+// the wrong (recreated) instance.
+async function memioAddConnectorInstance(typeId) {
+  const connectors = await memioGetConnectors();
+  const instances = connectors[typeId] || [];
+  if (instances.length >= MEMIO_MAX_INSTANCES) return null;
+
+  const usedNumbers = instances.map((inst) => {
+    const match = /_(\d+)$/.exec(inst.id);
+    return match ? Number(match[1]) : 0;
+  });
+  const nextNumber = usedNumbers.length ? Math.max(...usedNumbers) + 1 : 1;
+  const instanceId = `${typeId}_${nextNumber}`;
+  const destKey = typeId === 'obsidian' ? 'folders' : 'pages';
+
+  const newInstance = {
+    id: instanceId,
+    name: `${MEMIO_TYPE_LABELS[typeId]} ${nextNumber}`,
+    enabled: false,
+    isDefault: instances.length === 0,
+    tagRules: [],
+    collation: 'individual',
+    [destKey]: []
+  };
+
+  const updated = instances.concat([newInstance]);
+  const { connectors: currentSync } = await chrome.storage.sync.get(MEMIO_CONNECTORS_KEY);
+  await chrome.storage.sync.set({ connectors: Object.assign({}, currentSync, { [typeId]: updated }) });
+
+  return instanceId;
+}
+
+// Cannot delete the only instance of a type. Deleting the default instance
+// auto-promotes the next remaining one first.
+async function memioRemoveConnectorInstance(typeId, instanceId) {
+  const connectors = await memioGetConnectors();
+  const instances = connectors[typeId] || [];
+  if (instances.length <= 1) return false;
+
+  const removing = instances.find((i) => i.id === instanceId);
+  if (!removing) return false;
+
+  const remaining = instances.filter((i) => i.id !== instanceId);
+  if (removing.isDefault && remaining.length) remaining[0].isDefault = true;
+
+  const { connectors: currentSync } = await chrome.storage.sync.get(MEMIO_CONNECTORS_KEY);
+  await chrome.storage.sync.set({ connectors: Object.assign({}, currentSync, { [typeId]: remaining }) });
+
+  const { connectors_secrets } = await chrome.storage.local.get(MEMIO_SECRETS_KEY);
+  if (connectors_secrets && connectors_secrets[instanceId]) {
+    const updatedSecrets = Object.assign({}, connectors_secrets);
+    delete updatedSecrets[instanceId];
+    await chrome.storage.local.set({ connectors_secrets: updatedSecrets });
+  }
+
+  return true;
+}
+
+async function memioSetDefaultInstance(typeId, instanceId) {
+  const connectors = await memioGetConnectors();
+  const instances = (connectors[typeId] || []).map((inst) => Object.assign({}, inst, { isDefault: inst.id === instanceId }));
+
+  const { connectors: currentSync } = await chrome.storage.sync.get(MEMIO_CONNECTORS_KEY);
+  await chrome.storage.sync.set({ connectors: Object.assign({}, currentSync, { [typeId]: instances }) });
+}
+
+// Every enabled instance across both connector types, flattened into one
+// list — used by the Send to/Send all to popovers, where the user picks
+// any enabled destination (not just the default).
 async function memioGetEnabledConnectors() {
   const connectors = await memioGetConnectors();
-  return MEMIO_CONNECTOR_DEFS.filter(
-    (def) => !def.comingSoon && connectors[def.id] && connectors[def.id].enabled
-  ).map((def) => ({
-    id: def.id,
-    name: def.name
-  }));
+  const result = [];
+  MEMIO_MULTI_INSTANCE_TYPES.forEach((typeId) => {
+    (connectors[typeId] || []).forEach((inst) => {
+      if (inst.enabled) result.push({ id: inst.id, typeId, name: inst.name });
+    });
+  });
+  return result;
+}
+
+// Auto-send only ever targets the default instance per type (see PART 7) —
+// deliberately narrower than memioGetEnabledConnectors above.
+async function memioGetDefaultEnabledConnectors() {
+  const connectors = await memioGetConnectors();
+  const result = [];
+  MEMIO_MULTI_INSTANCE_TYPES.forEach((typeId) => {
+    const def = (connectors[typeId] || []).find((inst) => inst.isDefault);
+    if (def && def.enabled) result.push({ id: def.id, typeId, name: def.name });
+  });
+  return result;
 }
 
 function memioGetConnectorName(id) {
@@ -229,17 +404,18 @@ function memioStripInvalidFilenameChars(text) {
     .trim();
 }
 
-function memioSlugifyForFilename(text) {
-  const cleaned = memioStripInvalidFilenameChars(text || '')
-    .toLowerCase()
-    .replace(/\s+/g, '-');
-  if (!cleaned) return 'untitled';
+// Individual-send filename: the memo's title as-is (just the characters the
+// filesystem can't hold stripped out), so the note's title in Obsidian reads
+// exactly like the memo's own title — not a lowercased, hyphenated slug.
+function memioTitleToFilename(text) {
+  const cleaned = memioStripInvalidFilenameChars(text || '');
+  if (!cleaned) return 'Untitled';
   if (cleaned.length <= 60) return cleaned;
   // Truncate at a word boundary rather than mid-word — back up to the last
-  // hyphen inside the 60-char window, if there is one.
+  // space inside the 60-char window, if there is one.
   const truncated = cleaned.slice(0, 60);
-  const lastHyphen = truncated.lastIndexOf('-');
-  return lastHyphen > 0 ? truncated.slice(0, lastHyphen) : truncated;
+  const lastSpace = truncated.lastIndexOf(' ');
+  return lastSpace > 0 ? truncated.slice(0, lastSpace) : truncated;
 }
 
 // ---------------------------------------------------------------------
@@ -420,7 +596,7 @@ async function memioPostToObsidianVault(folder, filename, apiKey, body) {
 // a new H2 section by design — same-titled memos are meant to share one
 // note — rather than creating a second file or overwriting the first.
 async function memioSendObsidianIndividual(memo, apiKey, folder) {
-  const filename = `${memioSlugifyForFilename(memo.title)}.md`;
+  const filename = `${memioTitleToFilename(memo.title)}.md`;
   const exists = await memioObsidianFileExists(folder, filename, apiKey);
 
   if (!exists) {
@@ -457,7 +633,10 @@ async function memioSendToObsidian(memo, config, context, destinationFolder) {
   const rawFolder = destinationFolder || (config.folders && config.folders[0]) || 'memos';
   const folder = rawFolder.replace(/^\/+|\/+$/g, '') || 'memos';
 
-  const period = config.collation;
+  // A collation choice made one-time in the send popover takes priority
+  // over the instance's own saved setting, but only for this send — it's
+  // never written back to config.collation.
+  const period = (context && context.collationOverride) || config.collation;
   if (period && period !== 'individual') {
     await memioSendObsidianCollated(memo, apiKey, folder, period);
     return;
@@ -596,7 +775,7 @@ async function memioSendToNotion(memo, config, context, destination) {
   const dest = destination || (config.pages && config.pages[0]);
   if (!config.token || !dest || !dest.id) throw new Error('Missing credentials');
 
-  const period = config.collation;
+  const period = (context && context.collationOverride) || config.collation;
   if (period && period !== 'individual') {
     await memioSendToNotionCollated(memo, config, dest, period);
     return;
@@ -747,12 +926,14 @@ function memioGetDestinationsForConnector(config, id) {
   return [];
 }
 
-async function memioSendMemoToConnector(id, memo, context, destinationOverride) {
+async function memioSendMemoToConnector(typeId, instanceId, memo, context, destinationOverride) {
   const connectors = await memioGetConnectors();
-  const config = connectors[id];
-  const send = MEMIO_CONNECTOR_SEND[id];
+  const config = memioIsMultiInstance(typeId)
+    ? (connectors[typeId] || []).find((inst) => inst.id === instanceId)
+    : connectors[typeId];
+  const send = MEMIO_CONNECTOR_SEND[typeId];
   if (!send || !config) throw new Error('Unknown connector');
-  const destination = destinationOverride !== undefined ? destinationOverride : memioResolveDestination(id, config, memo.tags);
+  const destination = destinationOverride !== undefined ? destinationOverride : memioResolveDestination(typeId, config, memo.tags);
   await send(memo, config, context, destination);
 }
 
@@ -929,7 +1110,7 @@ function memioBuildSubsection(labelText, defaultOpen) {
 // list: reorderable via drag handle (first item = default), each removable,
 // plus an "+ Add ..." inline entry flow. Re-renders itself in place after
 // every mutation rather than patching the DOM piecemeal.
-function memioRenderDestinationList(body, def) {
+function memioRenderDestinationList(body, def, instanceId) {
   body.innerHTML = '';
 
   async function render() {
@@ -941,7 +1122,8 @@ function memioRenderDestinationList(body, def) {
     body.appendChild(subline);
 
     const connectors = await memioGetConnectors();
-    const config = connectors[def.id];
+    const config = (connectors[def.id] || []).find((inst) => inst.id === instanceId);
+    if (!config) return;
     const items = config[def.destinationsKey] || [];
 
     const list = document.createElement('div');
@@ -978,7 +1160,7 @@ function memioRenderDestinationList(body, def) {
       removeBtn.textContent = '×';
       removeBtn.addEventListener('click', async () => {
         const updated = items.filter((_, i) => i !== index);
-        await memioPatchConnector(def.id, { [def.destinationsKey]: updated });
+        await memioPatchConnectorInstance(def.id, instanceId, { [def.destinationsKey]: updated });
         await render();
       });
       row.appendChild(removeBtn);
@@ -998,7 +1180,7 @@ function memioRenderDestinationList(body, def) {
         const reordered = items.slice();
         const [moved] = reordered.splice(fromIndex, 1);
         reordered.splice(index, 0, moved);
-        await memioPatchConnector(def.id, { [def.destinationsKey]: reordered });
+        await memioPatchConnectorInstance(def.id, instanceId, { [def.destinationsKey]: reordered });
         await render();
       });
 
@@ -1051,7 +1233,7 @@ function memioRenderDestinationList(body, def) {
 
       if (def.id === 'obsidian') {
         const updated = items.concat([value]);
-        await memioPatchConnector(def.id, { folders: updated });
+        await memioPatchConnectorInstance(def.id, instanceId, { folders: updated });
         await render();
         return;
       }
@@ -1059,10 +1241,9 @@ function memioRenderDestinationList(body, def) {
       // Notion: fetch the real title before saving, so the destination list
       // shows a human-readable name instead of a raw page/database ID.
       try {
-        const current = await memioGetConnectors();
-        const { title, type } = await memioFetchNotionTitle(value, current.notion.token);
+        const { title, type } = await memioFetchNotionTitle(value, config.token);
         const updated = items.concat([{ id: value, title, type }]);
-        await memioPatchConnector('notion', { pages: updated });
+        await memioPatchConnectorInstance(def.id, instanceId, { pages: updated });
         await render();
       } catch (err) {
         addConfirmBtn.disabled = false;
@@ -1081,7 +1262,17 @@ function memioRenderDestinationList(body, def) {
 // Renders the AUTO-ROUTING RULES rule builder: one row per rule (tag →
 // folder/page dropdown, sourced from the same destinations array as
 // FOLDERS/PAGES & DATABASES above), plus "+ Add rule".
-function memioRenderTagRuleBuilder(body, def) {
+function memioRenderTagRuleBuilder(body, def, instanceId) {
+  // Re-reads fresh from storage rather than reusing an array closured at
+  // render time — if another rule's field was edited (or added/removed)
+  // since this render, that stale snapshot would silently overwrite those
+  // changes when written back.
+  async function getFreshRules() {
+    const fresh = await memioGetConnectors();
+    const inst = (fresh[def.id] || []).find((i) => i.id === instanceId);
+    return (inst && inst.tagRules) || [];
+  }
+
   async function render() {
     body.innerHTML = '';
 
@@ -1091,7 +1282,8 @@ function memioRenderTagRuleBuilder(body, def) {
     body.appendChild(subline);
 
     const connectors = await memioGetConnectors();
-    const config = connectors[def.id];
+    const config = (connectors[def.id] || []).find((inst) => inst.id === instanceId);
+    if (!config) return;
     const destinations = memioGetDestinationsForConnector(config, def.id);
     const rules = config.tagRules || [];
 
@@ -1115,15 +1307,10 @@ function memioRenderTagRuleBuilder(body, def) {
       tagInput.placeholder = 'tag';
       tagInput.value = rule.tag || '';
       tagInput.addEventListener('change', async () => {
-        // Re-read fresh from storage rather than reusing the `rules` array
-        // closured at render time — if another rule's field was edited (or
-        // added/removed) since this render, that stale snapshot would
-        // silently overwrite those changes when written back.
-        const freshConnectors = await memioGetConnectors();
-        const freshRules = (freshConnectors[def.id].tagRules || []).slice();
+        const freshRules = (await getFreshRules()).slice();
         if (!freshRules[index]) return;
         freshRules[index] = Object.assign({}, freshRules[index], { tag: tagInput.value.trim() });
-        await memioPatchConnector(def.id, { tagRules: freshRules });
+        await memioPatchConnectorInstance(def.id, instanceId, { tagRules: freshRules });
         await render();
       });
       row.appendChild(tagInput);
@@ -1144,8 +1331,7 @@ function memioRenderTagRuleBuilder(body, def) {
       const currentDestId = def.id === 'obsidian' ? rule.folder : rule.pageId;
       if (currentDestId) select.value = currentDestId;
       select.addEventListener('change', async () => {
-        const freshConnectors = await memioGetConnectors();
-        const freshRules = (freshConnectors[def.id].tagRules || []).slice();
+        const freshRules = (await getFreshRules()).slice();
         if (!freshRules[index]) return;
         if (def.id === 'obsidian') {
           freshRules[index] = Object.assign({}, freshRules[index], { folder: select.value });
@@ -1156,7 +1342,7 @@ function memioRenderTagRuleBuilder(body, def) {
             pageTitle: chosen ? chosen.label : ''
           });
         }
-        await memioPatchConnector(def.id, { tagRules: freshRules });
+        await memioPatchConnectorInstance(def.id, instanceId, { tagRules: freshRules });
         await render();
       });
       row.appendChild(select);
@@ -1167,9 +1353,8 @@ function memioRenderTagRuleBuilder(body, def) {
       removeBtn.setAttribute('aria-label', 'Remove rule');
       removeBtn.textContent = '×';
       removeBtn.addEventListener('click', async () => {
-        const freshConnectors = await memioGetConnectors();
-        const freshRules = (freshConnectors[def.id].tagRules || []).filter((_, i) => i !== index);
-        await memioPatchConnector(def.id, { tagRules: freshRules });
+        const freshRules = (await getFreshRules()).filter((_, i) => i !== index);
+        await memioPatchConnectorInstance(def.id, instanceId, { tagRules: freshRules });
         await render();
       });
       row.appendChild(removeBtn);
@@ -1190,15 +1375,263 @@ function memioRenderTagRuleBuilder(body, def) {
         def.id === 'obsidian'
           ? { tag: '', folder: defaultDest ? defaultDest.id : '' }
           : { tag: '', pageId: defaultDest ? defaultDest.id : '', pageTitle: defaultDest ? defaultDest.label : '' };
-      const freshConnectors = await memioGetConnectors();
-      const freshRules = (freshConnectors[def.id].tagRules || []).concat([newRule]);
-      await memioPatchConnector(def.id, { tagRules: freshRules });
+      const freshRules = (await getFreshRules()).concat([newRule]);
+      await memioPatchConnectorInstance(def.id, instanceId, { tagRules: freshRules });
       await render();
     });
     body.appendChild(addLink);
   }
 
   render();
+}
+
+// Enable toggle only — split out from the rest of the auth content so
+// multi-instance rows can slot a "Set as default" button in between the
+// toggle and the instructions/credentials/test-connection block, matching
+// the brief's listed order.
+function memioBuildEnableToggle(def, instance, container, onChange) {
+  const toggleRow = document.createElement('label');
+  toggleRow.className = 'toggle-row';
+  const toggleText = document.createElement('span');
+  toggleText.textContent = 'Enable';
+  const toggleInput = document.createElement('input');
+  toggleInput.type = 'checkbox';
+  toggleInput.className = 'toggle-switch';
+  toggleInput.checked = !!instance.enabled;
+  toggleRow.appendChild(toggleText);
+  toggleRow.appendChild(toggleInput);
+  container.appendChild(toggleRow);
+
+  toggleInput.addEventListener('change', async () => {
+    await memioPatchConnectorInstance(def.id, instance.id, { enabled: toggleInput.checked });
+    if (onChange) onChange(toggleInput.checked);
+  });
+
+  return toggleInput;
+}
+
+// Setup instructions, credential field(s), and Test connection — the rest
+// of "CONFIGURE" after the Enable toggle. Unchanged copy/behaviour from
+// before multi-instance existed, just scoped to one specific instance.
+function memioBuildConfigureRest(def, instance, container, toggleInput) {
+  const instructions = document.createElement('div');
+  instructions.className = 'instructions';
+
+  const titleEl = document.createElement('p');
+  titleEl.className = 'instructions-title';
+  titleEl.textContent = def.title;
+  instructions.appendChild(titleEl);
+
+  const introEl = document.createElement('p');
+  introEl.className = 'instructions-text';
+  introEl.textContent = def.intro;
+  instructions.appendChild(introEl);
+
+  const stepsList = document.createElement('ol');
+  stepsList.className = 'instructions-steps';
+  def.steps.forEach((step) => {
+    const li = document.createElement('li');
+    li.textContent = step;
+    stepsList.appendChild(li);
+  });
+  instructions.appendChild(stepsList);
+
+  if (def.note) {
+    const noteEl = document.createElement('p');
+    noteEl.className = 'instructions-text';
+    noteEl.textContent = def.note;
+    instructions.appendChild(noteEl);
+  }
+  container.appendChild(instructions);
+
+  const fieldEls = {};
+  def.fields.forEach((field) => {
+    const input = document.createElement('input');
+    input.type = field.type;
+    input.className = 'cred-input';
+    input.placeholder = field.placeholder;
+    input.value = instance[field.key] || '';
+    input.addEventListener('change', async () => {
+      await memioPatchConnectorInstance(def.id, instance.id, { [field.key]: input.value });
+    });
+    fieldEls[field.key] = input;
+    container.appendChild(input);
+  });
+
+  const actions = document.createElement('div');
+  actions.className = 'connector-actions';
+
+  const testBtn = document.createElement('button');
+  testBtn.type = 'button';
+  testBtn.className = 'btn-secondary';
+  testBtn.textContent = 'Test connection';
+
+  const statusEl = document.createElement('span');
+  statusEl.className = 'connection-status';
+
+  const reasonEl = document.createElement('p');
+  reasonEl.className = 'connection-status-reason';
+  reasonEl.hidden = true;
+
+  testBtn.addEventListener('click', async () => {
+    testBtn.disabled = true;
+    testBtn.textContent = 'Testing...';
+    statusEl.className = 'connection-status';
+    statusEl.textContent = '';
+    reasonEl.hidden = true;
+    reasonEl.textContent = '';
+
+    const testConfig = { enabled: toggleInput.checked };
+    def.fields.forEach((field) => {
+      testConfig[field.key] = fieldEls[field.key].value;
+    });
+    await memioPatchConnectorInstance(def.id, instance.id, testConfig);
+
+    try {
+      await MEMIO_CONNECTOR_TESTS[def.id](testConfig);
+      statusEl.className = 'connection-status connected';
+      statusEl.textContent = 'Connected';
+    } catch (err) {
+      statusEl.className = 'connection-status failed';
+      statusEl.textContent = 'Failed';
+      reasonEl.textContent = err.message || 'Something went wrong.';
+      reasonEl.hidden = false;
+    } finally {
+      testBtn.disabled = false;
+      testBtn.textContent = 'Test connection';
+    }
+  });
+
+  actions.appendChild(testBtn);
+  actions.appendChild(statusEl);
+  container.appendChild(actions);
+  container.appendChild(reasonEl);
+}
+
+// Replaces the instance name with a text input in place, saving on blur or
+// Enter, discarding on Escape. A dedicated edit icon (not the name text
+// itself) is the trigger, so it never conflicts with the row's own
+// expand/collapse click target.
+function memioStartInstanceRename(def, instance, nameText, editBtn) {
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'instance-rename-input';
+  input.value = instance.name;
+
+  nameText.replaceWith(input);
+  editBtn.hidden = true;
+  input.focus();
+  input.select();
+  input.addEventListener('click', (e) => e.stopPropagation());
+
+  let cancelled = false;
+
+  input.addEventListener('blur', async () => {
+    if (cancelled) return;
+    const newName = input.value.trim() || instance.name;
+    await memioPatchConnectorInstance(def.id, instance.id, { name: newName });
+    await memioRenderConnectorSections();
+  });
+
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      input.blur(); // triggers the save above
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      cancelled = true;
+      memioRenderConnectorSections();
+    }
+  });
+}
+
+function memioBuildInstanceRow(def, instance) {
+  const row = document.createElement('div');
+  row.className = 'instance-row';
+  row.dataset.instanceId = instance.id;
+
+  const instHeader = document.createElement('button');
+  instHeader.type = 'button';
+  instHeader.className = 'instance-header';
+
+  const nameWrap = document.createElement('span');
+  nameWrap.className = 'instance-name-wrap';
+
+  const dot = document.createElement('span');
+  dot.className = 'connector-status-dot';
+  dot.dataset.active = String(!!instance.enabled);
+  nameWrap.appendChild(dot);
+
+  const nameText = document.createElement('span');
+  nameText.className = 'instance-name-text';
+  nameText.textContent = instance.name;
+  nameWrap.appendChild(nameText);
+
+  const editBtn = document.createElement('button');
+  editBtn.type = 'button';
+  editBtn.className = 'instance-rename-btn';
+  editBtn.setAttribute('aria-label', `Rename ${instance.name}`);
+  editBtn.textContent = '✎';
+  editBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    memioStartInstanceRename(def, instance, nameText, editBtn);
+  });
+  nameWrap.appendChild(editBtn);
+
+  if (instance.isDefault) {
+    const pill = document.createElement('span');
+    pill.className = 'destination-default-pill';
+    pill.textContent = 'DEFAULT';
+    nameWrap.appendChild(pill);
+  }
+
+  const chevron = document.createElement('span');
+  chevron.className = 'connector-chevron';
+  chevron.innerHTML = '&#8250;';
+
+  instHeader.appendChild(nameWrap);
+  instHeader.appendChild(chevron);
+
+  const instBody = document.createElement('div');
+  instBody.className = 'instance-body connector-body';
+  instBody.hidden = true;
+
+  instHeader.addEventListener('click', () => {
+    instBody.hidden = !instBody.hidden;
+    instHeader.classList.toggle('open', !instBody.hidden);
+  });
+
+  const toggleInput = memioBuildEnableToggle(def, instance, instBody, (checked) => {
+    dot.dataset.active = String(checked);
+  });
+
+  if (!instance.isDefault) {
+    const setDefaultBtn = document.createElement('button');
+    setDefaultBtn.type = 'button';
+    setDefaultBtn.className = 'btn-secondary instance-set-default-btn';
+    setDefaultBtn.textContent = 'Set as default';
+    setDefaultBtn.addEventListener('click', async () => {
+      await memioSetDefaultInstance(def.id, instance.id);
+      await memioRenderConnectorSections();
+    });
+    instBody.appendChild(setDefaultBtn);
+  }
+
+  memioBuildConfigureRest(def, instance, instBody, toggleInput);
+
+  const removeLink = document.createElement('button');
+  removeLink.type = 'button';
+  removeLink.className = 'instance-remove-link';
+  removeLink.textContent = 'Remove';
+  removeLink.addEventListener('click', async () => {
+    const removed = await memioRemoveConnectorInstance(def.id, instance.id);
+    if (removed) await memioRenderConnectorSections();
+  });
+  instBody.appendChild(removeLink);
+
+  row.appendChild(instHeader);
+  row.appendChild(instBody);
+  return row;
 }
 
 async function memioRenderConnectorSections() {
@@ -1209,32 +1642,25 @@ async function memioRenderConnectorSections() {
   container.innerHTML = '';
 
   MEMIO_CONNECTOR_DEFS.forEach((def) => {
-    const state = connectors[def.id];
-
     const section = document.createElement('div');
     section.className = 'connector-section';
     section.dataset.connectorId = def.id;
-    if (def.comingSoon) section.classList.add('coming-soon');
-
-    const header = document.createElement('button');
-    header.type = 'button';
-    header.className = 'connector-header';
-    const badge = def.comingSoon ? '<span class="connector-badge">Coming soon</span>' : '';
-    const statusDot = def.comingSoon
-      ? ''
-      : `<span class="connector-status-dot" id="statusDot-${def.id}" data-active="${!!state.enabled}"></span>`;
-    header.innerHTML = `<span class="connector-name">${statusDot}${memioEscapeText(def.name)}</span><span class="connector-header-right">${badge}<span class="connector-chevron">&#8250;</span></span>`;
-
-    const body = document.createElement('div');
-    body.className = 'connector-body';
-    body.hidden = true;
-
-    header.addEventListener('click', () => {
-      body.hidden = !body.hidden;
-      header.classList.toggle('open', !body.hidden);
-    });
 
     if (def.comingSoon) {
+      section.classList.add('coming-soon');
+      const header = document.createElement('button');
+      header.type = 'button';
+      header.className = 'connector-header';
+      header.innerHTML = `<span class="connector-name">${memioEscapeText(def.name)}</span><span class="connector-header-right"><span class="connector-badge">Coming soon</span><span class="connector-chevron">&#8250;</span></span>`;
+
+      const body = document.createElement('div');
+      body.className = 'connector-body';
+      body.hidden = true;
+      header.addEventListener('click', () => {
+        body.hidden = !body.hidden;
+        header.classList.toggle('open', !body.hidden);
+      });
+
       const msg = document.createElement('p');
       msg.className = 'instructions-text coming-soon-text';
       msg.textContent = def.comingSoonMessage;
@@ -1246,125 +1672,73 @@ async function memioRenderConnectorSections() {
       return;
     }
 
-    const statusDotEl = header.querySelector(`#statusDot-${def.id}`);
+    const instances = connectors[def.id] || [];
+    const anyEnabled = instances.some((inst) => inst.enabled);
 
-    // Connectors tab only ever shows one thing per connector now (auth +
-    // test connection) — FOLDERS/PAGES and AUTO-ROUTING RULES moved to the
-    // Configure tab. With just one thing left, a nested "CONFIGURE"
-    // sub-collapsible would be a lone, pointless accordion header (same
-    // call already made for the AI section) — its contents go straight
-    // into the connector row's own body instead.
-    const configureBody = body;
+    const header = document.createElement('button');
+    header.type = 'button';
+    header.className = 'connector-header';
+    header.innerHTML = `<span class="connector-name"><span class="connector-status-dot" data-active="${anyEnabled}"></span>${memioEscapeText(def.name)}</span><span class="connector-header-right"><span class="connector-chevron">&#8250;</span></span>`;
 
-    const toggleRow = document.createElement('label');
-    toggleRow.className = 'toggle-row';
-    const toggleText = document.createElement('span');
-    toggleText.textContent = 'Enable';
-    const toggleInput = document.createElement('input');
-    toggleInput.type = 'checkbox';
-    toggleInput.className = 'toggle-switch';
-    toggleInput.checked = !!state.enabled;
-    toggleRow.appendChild(toggleText);
-    toggleRow.appendChild(toggleInput);
-    configureBody.appendChild(toggleRow);
+    const body = document.createElement('div');
+    body.className = 'connector-body';
+    body.hidden = true;
 
-    toggleInput.addEventListener('change', async () => {
-      await memioPatchConnector(def.id, { enabled: toggleInput.checked });
-      if (statusDotEl) statusDotEl.dataset.active = String(toggleInput.checked);
+    header.addEventListener('click', () => {
+      body.hidden = !body.hidden;
+      header.classList.toggle('open', !body.hidden);
     });
 
-    const instructions = document.createElement('div');
-    instructions.className = 'instructions';
-
-    const titleEl = document.createElement('p');
-    titleEl.className = 'instructions-title';
-    titleEl.textContent = def.title;
-    instructions.appendChild(titleEl);
-
-    const introEl = document.createElement('p');
-    introEl.className = 'instructions-text';
-    introEl.textContent = def.intro;
-    instructions.appendChild(introEl);
-
-    const stepsList = document.createElement('ol');
-    stepsList.className = 'instructions-steps';
-    def.steps.forEach((step) => {
-      const li = document.createElement('li');
-      li.textContent = step;
-      stepsList.appendChild(li);
-    });
-    instructions.appendChild(stepsList);
-
-    if (def.note) {
-      const noteEl = document.createElement('p');
-      noteEl.className = 'instructions-text';
-      noteEl.textContent = def.note;
-      instructions.appendChild(noteEl);
+    if (instances.length === 1) {
+      // Flat view, identical to before multi-instance existed — instance
+      // chrome (name/pencil/DEFAULT pill/per-instance expand) only shows up
+      // once a 2nd instance is added, so the common case (one vault, one
+      // workspace) never sees any of this extra structure.
+      const statusDot = header.querySelector('.connector-status-dot');
+      const toggleInput = memioBuildEnableToggle(def, instances[0], body, (checked) => {
+        if (statusDot) statusDot.dataset.active = String(checked);
+      });
+      memioBuildConfigureRest(def, instances[0], body, toggleInput);
+    } else {
+      instances.forEach((instance) => {
+        body.appendChild(memioBuildInstanceRow(def, instance));
+      });
     }
-    configureBody.appendChild(instructions);
 
-    const fieldEls = {};
-    def.fields.forEach((field) => {
-      const input = document.createElement('input');
-      input.type = field.type;
-      input.className = 'cred-input';
-      input.placeholder = field.placeholder;
-      input.value = state[field.key] || '';
-      input.addEventListener('change', async () => {
-        await memioPatchConnector(def.id, { [field.key]: input.value });
-      });
-      fieldEls[field.key] = input;
-      configureBody.appendChild(input);
-    });
+    const addLink = document.createElement('button');
+    addLink.type = 'button';
+    addLink.className = 'add-destination-link';
+    addLink.textContent = `+ Add ${def.instanceNoun}`;
+    if (instances.length >= MEMIO_MAX_INSTANCES) {
+      addLink.disabled = true;
+      addLink.title = 'Maximum 5 connections reached.';
+    }
+    addLink.addEventListener('click', async () => {
+      const newInstanceId = await memioAddConnectorInstance(def.id);
+      if (!newInstanceId) return;
+      await memioRenderConnectorSections();
 
-    const actions = document.createElement('div');
-    actions.className = 'connector-actions';
-
-    const testBtn = document.createElement('button');
-    testBtn.type = 'button';
-    testBtn.className = 'btn-secondary';
-    testBtn.textContent = 'Test connection';
-
-    const statusEl = document.createElement('span');
-    statusEl.className = 'connection-status';
-
-    const reasonEl = document.createElement('p');
-    reasonEl.className = 'connection-status-reason';
-    reasonEl.hidden = true;
-
-    testBtn.addEventListener('click', async () => {
-      testBtn.disabled = true;
-      testBtn.textContent = 'Testing...';
-      statusEl.className = 'connection-status';
-      statusEl.textContent = '';
-      reasonEl.hidden = true;
-      reasonEl.textContent = '';
-
-      const config = { enabled: toggleInput.checked };
-      def.fields.forEach((field) => {
-        config[field.key] = fieldEls[field.key].value;
-      });
-      await memioPatchConnector(def.id, config);
-
-      try {
-        await MEMIO_CONNECTOR_TESTS[def.id](config);
-        statusEl.className = 'connection-status connected';
-        statusEl.textContent = 'Connected';
-      } catch (err) {
-        statusEl.className = 'connection-status failed';
-        statusEl.textContent = 'Failed';
-        reasonEl.textContent = err.message || 'Something went wrong.';
-        reasonEl.hidden = false;
-      } finally {
-        testBtn.disabled = false;
-        testBtn.textContent = 'Test connection';
+      // Re-open this connector type and expand the freshly-created instance
+      // so the user can configure it immediately, per the brief.
+      const refreshed = Array.from(container.querySelectorAll('.connector-section')).find((s) => s.dataset.connectorId === def.id);
+      if (!refreshed) return;
+      const refreshedHeader = refreshed.querySelector(':scope > .connector-header');
+      const refreshedBody = refreshed.querySelector(':scope > .connector-body');
+      if (refreshedHeader && refreshedBody) {
+        refreshedBody.hidden = false;
+        refreshedHeader.classList.add('open');
+      }
+      const newRow = refreshed.querySelector(`[data-instance-id="${newInstanceId}"]`);
+      if (newRow) {
+        const newRowHeader = newRow.querySelector('.instance-header');
+        const newRowBody = newRow.querySelector('.instance-body');
+        if (newRowHeader && newRowBody) {
+          newRowBody.hidden = false;
+          newRowHeader.classList.add('open');
+        }
       }
     });
-
-    actions.appendChild(testBtn);
-    actions.appendChild(statusEl);
-    configureBody.appendChild(actions);
-    configureBody.appendChild(reasonEl);
+    body.appendChild(addLink);
 
     section.appendChild(header);
     section.appendChild(body);
@@ -1375,7 +1749,7 @@ async function memioRenderConnectorSections() {
 // Renders the COLLATION subsection — radio group choosing how memos for a
 // given connector are grouped when sent (individual/daily/weekly/monthly).
 // Per-connector, independent of the other connector's setting.
-function memioRenderCollationSection(body, def) {
+function memioRenderCollationSection(body, def, instanceId) {
   async function render() {
     body.innerHTML = '';
 
@@ -1385,7 +1759,9 @@ function memioRenderCollationSection(body, def) {
     body.appendChild(subline);
 
     const connectors = await memioGetConnectors();
-    const current = connectors[def.id].collation || 'individual';
+    const config = (connectors[def.id] || []).find((inst) => inst.id === instanceId);
+    if (!config) return;
+    const current = config.collation || 'individual';
 
     const options = [
       ['individual', 'Individual notes (one per memo)'],
@@ -1402,11 +1778,11 @@ function memioRenderCollationSection(body, def) {
 
       const input = document.createElement('input');
       input.type = 'radio';
-      input.name = `collation-${def.id}`;
+      input.name = `collation-${instanceId}`;
       input.value = value;
       input.checked = current === value;
       input.addEventListener('change', async () => {
-        if (input.checked) await memioPatchConnector(def.id, { collation: value });
+        if (input.checked) await memioPatchConnectorInstance(def.id, instanceId, { collation: value });
       });
 
       optionLabel.appendChild(input);
@@ -1420,16 +1796,27 @@ function memioRenderCollationSection(body, def) {
 }
 
 // Configure tab — shows FOLDERS/PAGES, AUTO-ROUTING RULES, and COLLATION for
-// enabled connectors only (re-rendered every time the tab is opened, since
-// which connectors are enabled can change while this tab isn't visible).
+// every ENABLED INSTANCE (re-rendered every time the tab is opened, since
+// which instances are enabled can change while this tab isn't visible).
+// Each section is labelled with the instance's own name — for the common
+// case of exactly one instance per type, that name defaults to just
+// "Obsidian"/"Notion", so this looks identical to the old one-per-type
+// layout with zero extra visual complexity. A 2nd instance just shows up
+// as its own separate section, e.g. "Obsidian 2".
 async function memioRenderConfigureSections(container) {
   if (!container) return;
   container.innerHTML = '';
 
   const connectors = await memioGetConnectors();
-  const enabledDefs = MEMIO_CONNECTOR_DEFS.filter((def) => !def.comingSoon && connectors[def.id] && connectors[def.id].enabled);
+  const enabledInstances = [];
+  MEMIO_CONNECTOR_DEFS.forEach((def) => {
+    if (def.comingSoon) return;
+    (connectors[def.id] || []).forEach((inst) => {
+      if (inst.enabled) enabledInstances.push({ def, instance: inst });
+    });
+  });
 
-  if (enabledDefs.length === 0) {
+  if (enabledInstances.length === 0) {
     const empty = document.createElement('p');
     empty.className = 'configure-empty-state';
     empty.innerHTML = 'No apps connected yet.<br>Connect and enable one under Connectors first.';
@@ -1437,15 +1824,16 @@ async function memioRenderConfigureSections(container) {
     return;
   }
 
-  enabledDefs.forEach((def) => {
+  enabledInstances.forEach(({ def, instance }) => {
     const section = document.createElement('div');
     section.className = 'connector-section configure-connector-section';
     section.dataset.connectorId = def.id;
+    section.dataset.instanceId = instance.id;
 
     const header = document.createElement('button');
     header.type = 'button';
     header.className = 'connector-header';
-    header.innerHTML = `<span class="connector-name">${memioEscapeText(def.name)}</span><span class="connector-header-right"><span class="connector-chevron">&#8250;</span></span>`;
+    header.innerHTML = `<span class="connector-name">${memioEscapeText(instance.name)}</span><span class="connector-header-right"><span class="connector-chevron">&#8250;</span></span>`;
 
     const body = document.createElement('div');
     body.className = 'connector-body';
@@ -1458,17 +1846,17 @@ async function memioRenderConfigureSections(container) {
 
     const destinationsSub = memioBuildSubsection(def.destinationsLabel, true);
     destinationsSub.wrap.dataset.subsection = 'destinations';
-    memioRenderDestinationList(destinationsSub.body, def);
+    memioRenderDestinationList(destinationsSub.body, def, instance.id);
     body.appendChild(destinationsSub.wrap);
 
     const routingSub = memioBuildSubsection('AUTO-ROUTING RULES', false);
     routingSub.wrap.dataset.subsection = 'routing';
-    memioRenderTagRuleBuilder(routingSub.body, def);
+    memioRenderTagRuleBuilder(routingSub.body, def, instance.id);
     body.appendChild(routingSub.wrap);
 
     const collationSub = memioBuildSubsection('COLLATION', false);
     collationSub.wrap.dataset.subsection = 'collation';
-    memioRenderCollationSection(collationSub.body, def);
+    memioRenderCollationSection(collationSub.body, def, instance.id);
     body.appendChild(collationSub.wrap);
 
     section.appendChild(header);
@@ -1479,8 +1867,10 @@ async function memioRenderConfigureSections(container) {
 
 // Best-effort deep link used by the send-destination popover's "Add one
 // under Configure" link: opens the Configure tab, expands the given
-// connector's row and its FOLDERS/PAGES & DATABASES subsection.
-async function memioOpenConfigureDestinations(connectorId) {
+// instance's row (falling back to the first section for that connector
+// type if the exact instance isn't enabled/rendered) and its
+// FOLDERS/PAGES & DATABASES subsection.
+async function memioOpenConfigureDestinations(connectorId, instanceId) {
   const tabBtn = memioQ('settingsTabConfigure');
   if (tabBtn) tabBtn.click();
 
@@ -1488,7 +1878,10 @@ async function memioOpenConfigureDestinations(connectorId) {
   await memioRenderConfigureSections(container);
   if (!container) return;
 
-  const section = Array.from(container.querySelectorAll('.configure-connector-section')).find((s) => s.dataset.connectorId === connectorId);
+  const sections = Array.from(container.querySelectorAll('.configure-connector-section'));
+  const section =
+    (instanceId && sections.find((s) => s.dataset.instanceId === instanceId)) ||
+    sections.find((s) => s.dataset.connectorId === connectorId);
   if (!section) return;
 
   const header = section.querySelector(':scope > .connector-header');

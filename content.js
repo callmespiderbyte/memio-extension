@@ -25,6 +25,13 @@
   let allMemos = [];
   let selectedTags = [];
 
+  // New-view destination preview (see initDestinationPreview) — set only
+  // when the user manually changes the vault/folder dropdown there. In
+  // memory only, per Part 4: persists across saves within this window
+  // session, resets to null (back to normal default-instance auto-send)
+  // on a full window/page reload, never touches chrome.storage.
+  let destinationPreviewOverride = null;
+
   // Captured synchronously the instant this script is injected — before any
   // shadow-DOM setup, network fetches (fonts/styles.css), or other init
   // work runs. initMemoView() reads highlighted text from this, not a fresh
@@ -204,6 +211,11 @@
 Or highlight text on any page first — it auto-populates here when you open Memio."></textarea>
       <div class="source-url" id="sourceUrl"></div>
       <div id="tagInputField" class="tag-input"></div>
+      <div class="destination-preview" id="destinationPreview" hidden>
+        <select class="filter-select destination-preview-select" id="destinationPreviewVault"></select>
+        <span class="destination-preview-arrow">&rarr;</span>
+        <select class="filter-select destination-preview-select" id="destinationPreviewFolder"></select>
+      </div>
       <button type="button" class="btn-primary" id="saveBtn">Save it</button>
       <p class="saved-confirm" id="savedConfirm">Saved.</p>
     </main>
@@ -229,8 +241,13 @@ Or highlight text on any page first — it auto-populates here when you open Mem
       </div>
 
       <div class="actions-row">
+        <div class="send-all-row" id="sendAllRow" hidden>
+          <button class="btn-primary" id="sendAllToggleBtn" type="button">Send all to...</button>
+          <p class="send-all-progress" id="sendAllProgress" hidden></p>
+        </div>
+
         <div class="export-row">
-          <button class="btn-primary" id="exportToggleBtn" type="button">Export...</button>
+          <button class="btn-secondary" id="exportToggleBtn" type="button">Export...</button>
           <div class="export-panel" id="exportPanel" hidden>
             <p class="settings-label">Format</p>
             <div class="radio-group">
@@ -248,12 +265,6 @@ Or highlight text on any page first — it auto-populates here when you open Mem
             </div>
             <button class="btn-primary" id="exportConfirmBtn" type="button">Export</button>
           </div>
-        </div>
-
-        <div class="send-all-row" id="sendAllRow" hidden>
-          <button class="btn-secondary" id="sendAllToggleBtn" type="button">Send all to...</button>
-          <div class="send-to-menu" id="sendAllMenu" hidden></div>
-          <p class="send-all-progress" id="sendAllProgress" hidden></p>
         </div>
       </div>
 
@@ -660,17 +671,33 @@ Or highlight text on any page first — it auto-populates here when you open Mem
     const { autoSendOnSave } = await getStoredThemeSettings();
     if (!autoSendOnSave) return;
 
-    const enabled = await memioGetEnabledConnectors();
-    if (enabled.length === 0) return;
-
     const sentTo = [];
-    for (const connector of enabled) {
+
+    if (destinationPreviewOverride) {
+      // The user explicitly picked a destination in the New view's preview
+      // — that one choice wins for this save, instead of "every enabled
+      // type's default instance."
+      const { typeId, instanceId, name, destination } = destinationPreviewOverride;
       try {
-        await memioSendMemoToConnector(connector.id, memo);
-        sentTo.push(connector.id);
+        await memioSendMemoToConnector(typeId, instanceId, memo, undefined, destination);
+        sentTo.push({ id: instanceId, typeId, name });
       } catch (err) {
         // Leave it off sentTo — it'll still show up in History with a
-        // manual "Send to..." option for whichever connector didn't go through.
+        // manual "Send to..." option.
+      }
+    } else {
+      // No override touched — normal behaviour: each connector type's own
+      // default instance, if enabled. Silently does nothing if there's no
+      // enabled default anywhere (per PART 7 — never errors for this).
+      const defaultEnabled = await memioGetDefaultEnabledConnectors();
+      for (const inst of defaultEnabled) {
+        try {
+          await memioSendMemoToConnector(inst.typeId, inst.id, memo);
+          sentTo.push({ id: inst.id, typeId: inst.typeId, name: inst.name });
+        } catch (err) {
+          // Leave it off sentTo — it'll still show up in History with a
+          // manual "Send to..." option for whichever connector didn't go through.
+        }
       }
     }
 
@@ -693,6 +720,9 @@ Or highlight text on any page first — it auto-populates here when you open Mem
     const saveBtn = memioQ('saveBtn');
     const tagInputField = memioQ('tagInputField');
     const savedConfirm = memioQ('savedConfirm');
+    const destinationPreview = memioQ('destinationPreview');
+    const destinationPreviewVault = memioQ('destinationPreviewVault');
+    const destinationPreviewFolder = memioQ('destinationPreviewFolder');
 
     const draft = await getDraft();
     let url;
@@ -723,8 +753,98 @@ Or highlight text on any page first — it auto-populates here when you open Mem
       }, 400);
     };
 
-    const tagWidget = memioCreateTagInput(tagInputField, initialTags, persistDraft);
+    let refreshDestinationPreview = null;
+    const tagWidget = memioCreateTagInput(tagInputField, initialTags, () => {
+      persistDraft();
+      if (refreshDestinationPreview) refreshDestinationPreview();
+    });
     textarea.addEventListener('input', persistDraft);
+
+    // Live preview of where auto-send will deliver this memo. Reflects
+    // tag-based auto-routing as tags change (see refreshDestinationPreview
+    // above), same as the manual "Send to..." popover — an explicit vault
+    // or folder pick below overrides that live default for this save only.
+    async function initDestinationPreview() {
+      const { autoSendOnSave } = await getStoredThemeSettings();
+      const enabledInstances = autoSendOnSave ? await memioGetEnabledConnectors() : [];
+      if (!autoSendOnSave || enabledInstances.length === 0) {
+        destinationPreview.hidden = true;
+        return;
+      }
+
+      const connectors = await memioGetConnectors();
+      const instanceConfig = (inst) => (connectors[inst.typeId] || []).find((i) => i.id === inst.id);
+
+      destinationPreviewVault.innerHTML = '';
+      const groupsByType = {};
+      enabledInstances.forEach((inst) => {
+        if (!groupsByType[inst.typeId]) {
+          const group = document.createElement('optgroup');
+          group.label = inst.typeId.toUpperCase();
+          groupsByType[inst.typeId] = group;
+          destinationPreviewVault.appendChild(group);
+        }
+        const config = instanceConfig(inst);
+        const option = document.createElement('option');
+        option.value = inst.id;
+        option.textContent = config && config.isDefault ? `${inst.name} (default)` : inst.name;
+        groupsByType[inst.typeId].appendChild(option);
+      });
+
+      const preselected =
+        (destinationPreviewOverride && enabledInstances.find((i) => i.id === destinationPreviewOverride.instanceId)) ||
+        enabledInstances.find((i) => (instanceConfig(i) || {}).isDefault) ||
+        enabledInstances[0];
+      destinationPreviewVault.value = preselected.id;
+
+      let folderManuallyChosen = false;
+
+      function refreshFolder(vaultJustChanged) {
+        const inst = enabledInstances.find((i) => i.id === destinationPreviewVault.value);
+        const config = instanceConfig(inst);
+        const destinations = memioGetDestinationsForConnector(config, inst.typeId);
+
+        destinationPreviewFolder.innerHTML = '';
+        destinations.forEach((d, i) => {
+          const option = document.createElement('option');
+          option.value = String(i);
+          option.textContent = d.label;
+          destinationPreviewFolder.appendChild(option);
+        });
+
+        if (vaultJustChanged) folderManuallyChosen = false;
+
+        if (!folderManuallyChosen) {
+          const tags = tagWidget.getTags();
+          const ruleDestination = memioFindMatchingTagRuleDestination(inst.typeId, config, tags);
+          if (ruleDestination !== null) {
+            const idx = destinations.findIndex((d) => JSON.stringify(d.value) === JSON.stringify(ruleDestination));
+            if (idx !== -1) destinationPreviewFolder.value = String(idx);
+          }
+        }
+
+        const chosen = destinations[Number(destinationPreviewFolder.value)];
+        destinationPreviewOverride = {
+          typeId: inst.typeId,
+          instanceId: inst.id,
+          name: inst.name,
+          destination: chosen ? chosen.value : undefined
+        };
+      }
+
+      destinationPreviewVault.addEventListener('change', () => refreshFolder(true));
+      destinationPreviewFolder.addEventListener('change', () => {
+        folderManuallyChosen = true;
+        refreshFolder(false);
+      });
+
+      refreshFolder(true);
+      destinationPreview.hidden = false;
+
+      refreshDestinationPreview = () => refreshFolder(false);
+    }
+
+    await initDestinationPreview();
 
     function clearTitleInvalid() {
       titleInput.classList.remove('invalid');
@@ -996,7 +1116,7 @@ Or highlight text on any page first — it auto-populates here when you open Mem
     setTimeout(() => shadowRoot.addEventListener('click', handler, true), 50);
   }
 
-  function showEmptyDestinationPopover(wrap, connectorId) {
+  function showEmptyDestinationPopover(wrap, typeId, instanceId) {
     closeDestinationPopover(wrap);
     const pop = document.createElement('div');
     pop.className = 'send-destination-popover';
@@ -1012,7 +1132,7 @@ Or highlight text on any page first — it auto-populates here when you open Mem
       e.preventDefault();
       pop.remove();
       memioOpenSettingsOverlay();
-      await memioOpenConfigureDestinations(connectorId);
+      await memioOpenConfigureDestinations(typeId, instanceId);
     });
     msg.appendChild(link);
     pop.appendChild(msg);
@@ -1021,29 +1141,107 @@ Or highlight text on any page first — it auto-populates here when you open Mem
     bindPopoverOutsideClose(wrap, pop);
   }
 
-  function showDestinationPickerPopover(wrap, destinations, onConfirm) {
+  const MEMIO_COLLATION_OPTIONS = [
+    ['individual', 'Send as individual memos'],
+    ['daily', 'Send by days'],
+    ['weekly', 'Send by weeks'],
+    ['monthly', 'Send by months']
+  ];
+
+  // Vault → Folder → Collation popover (PART 5). `availableInstances` is
+  // [{id, typeId, name}]; `onConfirm(typeId, instanceId, destination,
+  // collationOverride)` performs the actual send. Collation is a one-time
+  // choice for this send only — it's passed through as an override, never
+  // written back to the instance's own saved setting.
+  async function showSendPopover(wrap, memo, availableInstances, onConfirm) {
     closeDestinationPopover(wrap);
     const pop = document.createElement('div');
-    pop.className = 'send-destination-popover';
+    pop.className = 'send-destination-popover send-popover-steps';
 
-    const select = document.createElement('select');
-    select.className = 'filter-select send-popover-select';
-    destinations.forEach((d, i) => {
+    const connectors = await memioGetConnectors();
+    const instanceConfig = (inst) => (connectors[inst.typeId] || []).find((i) => i.id === inst.id);
+
+    const vaultSelect = document.createElement('select');
+    vaultSelect.className = 'filter-select send-popover-select';
+    const groupsByType = {};
+    availableInstances.forEach((inst) => {
+      if (!groupsByType[inst.typeId]) {
+        const group = document.createElement('optgroup');
+        group.label = inst.typeId.toUpperCase();
+        groupsByType[inst.typeId] = group;
+        vaultSelect.appendChild(group);
+      }
+      const config = instanceConfig(inst);
       const option = document.createElement('option');
-      option.value = String(i);
-      option.textContent = d.label;
-      select.appendChild(option);
+      option.value = inst.id;
+      option.textContent = config && config.isDefault ? `${inst.name} (default)` : inst.name;
+      groupsByType[inst.typeId].appendChild(option);
     });
-    pop.appendChild(select);
+    pop.appendChild(vaultSelect);
+
+    const folderSelect = document.createElement('select');
+    folderSelect.className = 'filter-select send-popover-select';
+    pop.appendChild(folderSelect);
+
+    const collationSelect = document.createElement('select');
+    collationSelect.className = 'filter-select send-popover-select send-popover-collation';
+    MEMIO_COLLATION_OPTIONS.forEach(([value, label]) => {
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = label;
+      collationSelect.appendChild(option);
+    });
+    pop.appendChild(collationSelect);
+
+    let folderManuallyChanged = false;
+    folderSelect.addEventListener('change', () => {
+      folderManuallyChanged = true;
+    });
+
+    function renderFolderAndCollation() {
+      const inst = availableInstances.find((i) => i.id === vaultSelect.value);
+      const config = instanceConfig(inst);
+      const destinations = memioGetDestinationsForConnector(config, inst.typeId);
+
+      folderSelect.innerHTML = '';
+      destinations.forEach((d, i) => {
+        const option = document.createElement('option');
+        option.value = String(i);
+        option.textContent = d.label;
+        folderSelect.appendChild(option);
+      });
+
+      // Reflects tag-based auto-routing by default (what would actually
+      // happen if this were an auto-send), not just the static default —
+      // an explicit folder pick below still overrides it for this send.
+      // Only meaningful for a single memo (the "Send to" case); bulk sends
+      // pass memo=null and just show the plain default, since one folder
+      // pick has to apply uniformly across every memo in the batch.
+      folderManuallyChanged = false;
+      const ruleDestination = memo ? memioFindMatchingTagRuleDestination(inst.typeId, config, memo.tags) : null;
+      if (ruleDestination !== null) {
+        const idx = destinations.findIndex((d) => JSON.stringify(d.value) === JSON.stringify(ruleDestination));
+        if (idx !== -1) folderSelect.value = String(idx);
+      }
+
+      collationSelect.value = config.collation || 'individual';
+    }
+
+    vaultSelect.addEventListener('change', renderFolderAndCollation);
+    renderFolderAndCollation();
 
     const sendBtn = document.createElement('button');
     sendBtn.type = 'button';
     sendBtn.className = 'btn-primary send-popover-confirm';
     sendBtn.textContent = 'Send';
     sendBtn.addEventListener('click', async () => {
-      const chosen = destinations[Number(select.value)];
+      const inst = availableInstances.find((i) => i.id === vaultSelect.value);
+      const config = instanceConfig(inst);
+      const destinations = memioGetDestinationsForConnector(config, inst.typeId);
+      const chosenDest = destinations[Number(folderSelect.value)];
+      const collationChoice = collationSelect.value;
       pop.remove();
-      await onConfirm(chosen.value);
+      await onConfirm(inst.typeId, inst.id, inst.name, chosenDest ? chosenDest.value : undefined, collationChoice);
     });
     pop.appendChild(sendBtn);
 
@@ -1059,11 +1257,11 @@ Or highlight text on any page first — it auto-populates here when you open Mem
   }
 
   async function buildSendToControl(memo, statusHost) {
-    const enabled = await memioGetEnabledConnectors();
-    if (enabled.length === 0) return null;
+    const enabledInstances = await memioGetEnabledConnectors();
+    if (enabledInstances.length === 0) return null;
 
-    const alreadySent = memo.sentTo || [];
-    const available = enabled.filter((c) => !alreadySent.includes(c.id));
+    const alreadySentIds = (memo.sentTo || []).map(memioSentToId);
+    const available = enabledInstances.filter((inst) => !alreadySentIds.includes(inst.id));
 
     const wrap = document.createElement('div');
     wrap.className = 'send-to-wrap';
@@ -1076,89 +1274,90 @@ Or highlight text on any page first — it auto-populates here when you open Mem
     if (available.length === 0) {
       btn.disabled = true;
       btn.classList.add('exhausted');
-      btn.title = 'Already sent to every enabled connector';
+      btn.title = 'Already sent to every enabled connection';
       wrap.appendChild(btn);
       return wrap;
     }
 
-    const menu = document.createElement('div');
-    menu.className = 'send-to-menu';
-    menu.hidden = true;
+    const performSend = async (typeId, instanceId, instanceName, destination, collationOverride) => {
+      btn.disabled = true;
+      btn.classList.add('spinner');
+      btn.textContent = '';
+      statusHost.textContent = '';
+      statusHost.className = 'send-status';
 
-    available.forEach((c) => {
-      const item = document.createElement('button');
-      item.type = 'button';
-      item.textContent = `Send to ${c.name}`;
-      item.addEventListener('click', async () => {
-        menu.hidden = true;
+      try {
+        const context = collationOverride ? { collationOverride } : undefined;
+        await memioSendMemoToConnector(typeId, instanceId, memo, context, destination);
+        statusHost.textContent = 'Sent.';
+        statusHost.className = 'send-status success';
+        const entry = { id: instanceId, typeId, name: instanceName };
+        await updateMemo(memo.id, { sentTo: (memo.sentTo || []).concat([entry]) });
+        setTimeout(() => {
+          populateFilters();
+          renderMemos();
+        }, 1500);
+      } catch (err) {
+        statusHost.innerHTML = '';
+        statusHost.className = 'send-status failed';
+        statusHost.appendChild(document.createTextNode('Failed. '));
+        const link = document.createElement('a');
+        link.href = '#';
+        link.className = 'send-status-link';
+        link.textContent = 'Check settings';
+        link.addEventListener('click', (e) => {
+          e.preventDefault();
+          memioOpenSettingsOverlay();
+        });
+        statusHost.appendChild(link);
+      } finally {
+        btn.disabled = false;
+        btn.classList.remove('spinner');
+        btn.textContent = 'Send to...';
+      }
+    };
 
-        const performSend = async (destination) => {
-          btn.disabled = true;
-          btn.classList.add('spinner');
-          btn.textContent = '';
-          statusHost.textContent = '';
-          statusHost.className = 'send-status';
-
-          try {
-            await memioSendMemoToConnector(c.id, memo, undefined, destination);
-            statusHost.textContent = 'Sent.';
-            statusHost.className = 'send-status success';
-            await updateMemo(memo.id, { sentTo: Array.from(new Set([...(memo.sentTo || []), c.id])) });
-            setTimeout(() => {
-              populateFilters();
-              renderMemos();
-            }, 1500);
-          } catch (err) {
-            statusHost.innerHTML = '';
-            statusHost.className = 'send-status failed';
-            statusHost.appendChild(document.createTextNode('Failed. '));
-            const link = document.createElement('a');
-            link.href = '#';
-            link.className = 'send-status-link';
-            link.textContent = 'Check settings';
-            link.addEventListener('click', (e) => {
-              e.preventDefault();
-              memioOpenSettingsOverlay();
-            });
-            statusHost.appendChild(link);
-          } finally {
-            btn.disabled = false;
-            btn.classList.remove('spinner');
-            btn.textContent = 'Send to...';
-          }
-        };
-
+    btn.addEventListener('click', async () => {
+      // Skip the popover entirely only when there's exactly one eligible
+      // destination overall — same "zero extra clicks when there's nothing
+      // to choose" shortcut as before, just extended to also require
+      // there being only one instance (not just one folder within it).
+      if (available.length === 1) {
+        const inst = available[0];
         const connectors = await memioGetConnectors();
-        const config = connectors[c.id];
-
-        // A matching auto-routing rule already decided where this memo
-        // goes — skip the destination picker entirely, same as auto-send.
-        const ruleDestination = memioFindMatchingTagRuleDestination(c.id, config, memo.tags);
+        const config = (connectors[inst.typeId] || []).find((i) => i.id === inst.id);
+        const ruleDestination = memioFindMatchingTagRuleDestination(inst.typeId, config, memo.tags);
         if (ruleDestination !== null) {
-          await performSend(ruleDestination);
+          await performSend(inst.typeId, inst.id, inst.name, ruleDestination);
           return;
         }
-
-        const destinations = memioGetDestinationsForConnector(config, c.id);
-
+        const destinations = memioGetDestinationsForConnector(config, inst.typeId);
         if (destinations.length === 0) {
-          showEmptyDestinationPopover(wrap, c.id);
-        } else if (destinations.length === 1) {
-          await performSend(destinations[0].value);
-        } else {
-          showDestinationPickerPopover(wrap, destinations, performSend);
+          showEmptyDestinationPopover(wrap, inst.typeId, inst.id);
+          return;
         }
-      });
-      menu.appendChild(item);
-    });
-
-    btn.addEventListener('click', () => {
-      menu.hidden = !menu.hidden;
+        if (destinations.length === 1) {
+          await performSend(inst.typeId, inst.id, inst.name, destinations[0].value);
+          return;
+        }
+      }
+      await showSendPopover(wrap, memo, available, performSend);
     });
 
     wrap.appendChild(btn);
-    wrap.appendChild(menu);
     return wrap;
+  }
+
+  // sentTo entries are either the new denormalized shape
+  // ({id, typeId, name} — instance name captured at send time, so renaming
+  // or deleting the instance later doesn't orphan the badge) or a legacy
+  // plain string (a bare connector-type id like "obsidian", from before
+  // multi-instance existed).
+  function memioSentToId(entry) {
+    return typeof entry === 'string' ? entry : entry.id;
+  }
+  function memioSentToLabel(entry) {
+    return typeof entry === 'string' ? memioGetConnectorName(entry) : entry.name;
   }
 
   function buildSentBadges(memo) {
@@ -1166,10 +1365,10 @@ Or highlight text on any page first — it auto-populates here when you open Mem
     if (!sentTo.length) return null;
     const row = document.createElement('div');
     row.className = 'sent-badges';
-    sentTo.forEach((id) => {
+    sentTo.forEach((entry) => {
       const badge = document.createElement('span');
       badge.className = 'sent-badge';
-      badge.textContent = `Sent to ${memioGetConnectorName(id)}`;
+      badge.textContent = `Sent to ${memioSentToLabel(entry)}`;
       row.appendChild(badge);
     });
     return row;
@@ -1191,13 +1390,13 @@ Or highlight text on any page first — it auto-populates here when you open Mem
     menu.className = 'send-to-menu';
     menu.hidden = true;
 
-    sentTo.forEach((id) => {
+    sentTo.forEach((entry) => {
       const item = document.createElement('button');
       item.type = 'button';
-      item.textContent = `Unsend from ${memioGetConnectorName(id)}`;
+      item.textContent = `Unsend from ${memioSentToLabel(entry)}`;
       item.addEventListener('click', async () => {
         menu.hidden = true;
-        const updated = (memo.sentTo || []).filter((c) => c !== id);
+        const updated = (memo.sentTo || []).filter((e) => memioSentToId(e) !== memioSentToId(entry));
         await updateMemo(memo.id, { sentTo: updated });
         populateFilters();
         renderMemos();
@@ -1730,33 +1929,13 @@ Or highlight text on any page first — it auto-populates here when you open Mem
 
   function initSendAll() {
     const toggleBtn = memioQ('sendAllToggleBtn');
-    const menu = memioQ('sendAllMenu');
+    const wrap = memioQ('sendAllRow');
     const progress = memioQ('sendAllProgress');
 
-    toggleBtn.addEventListener('click', async () => {
-      if (!menu.hidden) {
-        menu.hidden = true;
-        return;
-      }
-      const enabled = await memioGetEnabledConnectors();
-      menu.innerHTML = '';
-      enabled.forEach((c) => {
-        const item = document.createElement('button');
-        item.type = 'button';
-        item.textContent = `Send to ${c.name}`;
-        item.addEventListener('click', () => {
-          menu.hidden = true;
-          runBulkSend(c.id);
-        });
-        menu.appendChild(item);
-      });
-      menu.hidden = false;
-    });
-
-    async function runBulkSend(connectorId) {
-      const memos = getFilteredMemos().filter((c) => !(c.sentTo || []).includes(connectorId));
+    async function runBulkSend(typeId, instanceId, instanceName, destination, collationOverride) {
+      const memos = getFilteredMemos().filter((c) => !(c.sentTo || []).map(memioSentToId).includes(instanceId));
       const scopeLabel = buildScopeLabel();
-      const context = scopeLabel ? { scopeLabel } : undefined;
+      const context = Object.assign({}, scopeLabel ? { scopeLabel } : null, collationOverride ? { collationOverride } : null);
       const total = memos.length;
       let sent = 0;
       let failed = 0;
@@ -1775,10 +1954,11 @@ Or highlight text on any page first — it auto-populates here when you open Mem
 
       for (let i = 0; i < total; i++) {
         try {
-          await memioSendMemoToConnector(connectorId, memos[i], context);
+          await memioSendMemoToConnector(typeId, instanceId, memos[i], context, destination);
           sent++;
+          const entry = { id: instanceId, typeId, name: instanceName };
           await updateMemo(memos[i].id, {
-            sentTo: Array.from(new Set([...(memos[i].sentTo || []), connectorId]))
+            sentTo: (memos[i].sentTo || []).concat([entry])
           });
         } catch (err) {
           failed++;
@@ -1793,6 +1973,14 @@ Or highlight text on any page first — it auto-populates here when you open Mem
         progress.hidden = true;
       }, 4000);
     }
+
+    toggleBtn.addEventListener('click', async () => {
+      const enabledInstances = await memioGetEnabledConnectors();
+      if (enabledInstances.length === 0) return;
+      // memo=null: one folder/collation pick applies uniformly to the
+      // whole batch, rather than per-memo tag routing.
+      await showSendPopover(wrap, null, enabledInstances, runBulkSend);
+    });
   }
 
   function initTagFilter() {
@@ -1832,12 +2020,6 @@ Or highlight text on any page first — it auto-populates here when you open Mem
       const exportToggleBtn = memioQ('exportToggleBtn');
       if (!exportPanel.hidden && !exportPanel.contains(target) && target !== exportToggleBtn) {
         exportPanel.hidden = true;
-      }
-
-      const sendAllMenu = memioQ('sendAllMenu');
-      const sendAllToggleBtn = memioQ('sendAllToggleBtn');
-      if (!sendAllMenu.hidden && !sendAllMenu.contains(target) && target !== sendAllToggleBtn) {
-        sendAllMenu.hidden = true;
       }
 
       memioQAll('.send-to-menu').forEach((menu) => {

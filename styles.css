@@ -653,12 +653,15 @@
   position: absolute;
   top: 50%;
   left: 50%;
+  right: auto;
+  bottom: auto;
   width: 12px;
   height: 12px;
   margin: -6px 0 0 -6px;
   border: 2px solid var(--accent);
   border-top-color: transparent;
   border-radius: 50%;
+  opacity: 1;
   animation: memioSpin 600ms linear infinite;
 }
 
@@ -1842,6 +1845,114 @@ a.btn-primary {
   min-width: 0;
 }
 
+/* Per-instance rows inside a multi-instance connector type (Obsidian/Notion
+   once a 2nd instance exists) — nests inside .connector-body, one level down
+   from the type-level .connector-section/.connector-header. */
+.instance-row {
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.instance-row + .instance-row {
+  margin-top: 8px;
+}
+.instance-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 600;
+  font-size: 12px;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+.instance-header:hover {
+  color: var(--accent);
+}
+.instance-name-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.instance-name-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.instance-rename-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+}
+.instance-rename-btn:hover {
+  color: var(--accent);
+}
+.instance-rename-input {
+  background: var(--bg-surface);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 6px;
+  min-width: 0;
+  max-width: 140px;
+}
+.instance-rename-input:focus {
+  outline: none;
+}
+.instance-body {
+  border-top: 1px solid var(--border-subtle);
+}
+.instance-set-default-btn {
+  align-self: flex-start;
+}
+.instance-remove-link {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 0;
+}
+.instance-remove-link:hover {
+  color: var(--status-error);
+}
+
+/* New-view destination preview — inline Vault → Folder dropdowns shown
+   above the Save button only when auto-send is on and at least one
+   connector instance is enabled (hidden entirely otherwise). */
+.destination-preview {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.destination-preview[hidden] {
+  display: none;
+}
+.destination-preview-select {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+}
+.destination-preview-arrow {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
 /* Send-destination popover — appears above the "Send to..." button inside
    the same .send-to-wrap that already positions the plain connector-name
    menu, following the same position:absolute + bottom:100% pattern. */
@@ -1860,6 +1971,20 @@ a.btn-primary {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+/* The "Send all to..." row sits near the top of the history view, right
+   below the filter row — opening upward (the default, used by each memo's
+   own "Send to..." button lower in the list) would push the popover above
+   the visible window and get clipped/covered by the header. Open it
+   downward here instead, same direction as the neighbouring export panel. */
+.send-all-row .send-destination-popover {
+  bottom: auto;
+  top: 100%;
+  margin-bottom: 0;
+  margin-top: 4px;
+}
+.send-popover-select {
+  padding-right: 32px;
 }
 .send-popover-message {
   font-family: 'DM Sans', sans-serif;
