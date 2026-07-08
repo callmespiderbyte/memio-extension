@@ -1983,8 +1983,18 @@ a.btn-primary {
   margin-bottom: 0;
   margin-top: 4px;
 }
+/* Native <select> arrows are browser-drawn UI and ignore padding entirely —
+   padding-right alone can't push them inward. Draw our own chevron instead,
+   so its distance from the edge is actually controllable via
+   background-position. */
 .send-popover-select {
+  appearance: none;
+  -webkit-appearance: none;
   padding-right: 32px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23888580' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 16px center;
+  background-size: 10px 6px;
 }
 .send-popover-message {
   font-family: 'DM Sans', sans-serif;
