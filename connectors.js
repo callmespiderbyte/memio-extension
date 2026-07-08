@@ -1248,10 +1248,13 @@ async function memioRenderConnectorSections() {
 
     const statusDotEl = header.querySelector(`#statusDot-${def.id}`);
 
-    // ---- Level 2, subsection 1: CONFIGURE (open by default) ----
-    const configureSub = memioBuildSubsection('CONFIGURE', true);
-    configureSub.wrap.dataset.subsection = 'configure';
-    const configureBody = configureSub.body;
+    // Connectors tab only ever shows one thing per connector now (auth +
+    // test connection) — FOLDERS/PAGES and AUTO-ROUTING RULES moved to the
+    // Configure tab. With just one thing left, a nested "CONFIGURE"
+    // sub-collapsible would be a lone, pointless accordion header (same
+    // call already made for the AI section) — its contents go straight
+    // into the connector row's own body instead.
+    const configureBody = body;
 
     const toggleRow = document.createElement('label');
     toggleRow.className = 'toggle-row';
@@ -1362,20 +1365,6 @@ async function memioRenderConnectorSections() {
     actions.appendChild(statusEl);
     configureBody.appendChild(actions);
     configureBody.appendChild(reasonEl);
-
-    body.appendChild(configureSub.wrap);
-
-    // ---- Level 2, subsection 2: FOLDERS / PAGES & DATABASES (collapsed) ----
-    const destinationsSub = memioBuildSubsection(def.destinationsLabel, false);
-    destinationsSub.wrap.dataset.subsection = 'destinations';
-    memioRenderDestinationList(destinationsSub.body, def);
-    body.appendChild(destinationsSub.wrap);
-
-    // ---- Level 2, subsection 3: AUTO-ROUTING RULES (collapsed) ----
-    const routingSub = memioBuildSubsection('AUTO-ROUTING RULES', false);
-    routingSub.wrap.dataset.subsection = 'routing';
-    memioRenderTagRuleBuilder(routingSub.body, def);
-    body.appendChild(routingSub.wrap);
 
     section.appendChild(header);
     section.appendChild(body);

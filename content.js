@@ -25,6 +25,21 @@
   let allMemos = [];
   let selectedTags = [];
 
+  // Captured synchronously the instant this script is injected — before any
+  // shadow-DOM setup, network fetches (fonts/styles.css), or other init
+  // work runs. initMemoView() reads highlighted text from this, not a fresh
+  // window.getSelection() call, because by the time initMemoView() actually
+  // runs (after all of the above), the page's selection may already be
+  // gone. This matters more than it used to: injection is now on-demand
+  // (chrome.scripting.executeScript per click) rather than a script that
+  // was already sitting on the page from load time, so there's more delay
+  // between "user highlights text and clicks the icon" and "this file
+  // actually starts running" than there used to be.
+  const capturedPageContext = {
+    text: window.getSelection ? window.getSelection().toString() : '',
+    url: location.href
+  };
+
   // ---------------------------------------------------------------------
   // Storage helpers
   // ---------------------------------------------------------------------
@@ -52,16 +67,6 @@
 
   function memioUuid() {
     return crypto.randomUUID();
-  }
-
-  // We're already running inside the page's own content-script context, so
-  // getting the current selection/URL is direct — no cross-context
-  // messaging needed the way it was from a separate popup document.
-  function getPageContext() {
-    return {
-      text: window.getSelection ? window.getSelection().toString() : '',
-      url: location.href
-    };
   }
 
   function truncateUrl(url, maxLen = 42) {
@@ -699,9 +704,8 @@ Or highlight text on any page first — it auto-populates here when you open Mem
       initialTags = draft.tags || [];
       url = draft.url || '';
     } else {
-      const context = getPageContext();
-      textarea.value = context.text;
-      url = context.url;
+      textarea.value = capturedPageContext.text;
+      url = capturedPageContext.url;
     }
     sourceUrlEl.textContent = url;
     sourceUrlEl.dataset.url = url;
