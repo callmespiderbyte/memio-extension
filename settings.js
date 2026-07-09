@@ -39,7 +39,7 @@ function memioEventTarget(e) {
 }
 
 const MEMIO_ACCENTS = [
-  { name: 'yellow', label: 'Sand', swatchHex: '#F5C518' },
+  { name: 'yellow', label: 'Sand', swatchHex: '#FFB93E' },
   { name: 'green', label: 'Forest', swatchHex: '#4CAF50' },
   { name: 'coral', label: 'Coral', swatchHex: '#E8513A' },
   { name: 'blue', label: 'Ocean', swatchHex: '#2C5F8A' },
@@ -65,12 +65,22 @@ function applyAccentAndTheme(accentName, theme, colourMode) {
   }
 }
 
+// Edges (Soft/Sharp) is independent of accent/theme/colour-mode, so it's
+// applied via its own data attribute rather than folding into
+// applyAccentAndTheme and touching every one of its call sites.
+function applyEdges(edges) {
+  const host = memioHostRef;
+  if (!host) return;
+  host.dataset.edges = edges === 'sharp' ? 'sharp' : 'soft';
+}
+
 async function getStoredThemeSettings() {
   const { memio_settings } = await chrome.storage.sync.get('memio_settings');
   return {
     accentName: (memio_settings && memio_settings.accentName) || MEMIO_DEFAULT_ACCENT_NAME,
-    theme: (memio_settings && memio_settings.theme) || 'system',
+    theme: (memio_settings && memio_settings.theme) || 'light',
     colourMode: (memio_settings && memio_settings.colourMode) || 'accent',
+    edges: (memio_settings && memio_settings.edges) || 'soft',
     autoSendOnSave: !!(memio_settings && memio_settings.autoSendOnSave)
   };
 }
@@ -90,30 +100,91 @@ function memioCloseSettingsOverlay() {
   if (overlay) overlay.hidden = true;
 }
 
-function memioBuildSegmentedControl(host, options, activeValue, onSelect) {
+function memioBuildSegmentedControl(host, options, activeValue, onSelect, disabledValues) {
   if (!host) return;
   host.innerHTML = '';
+  const disabled = disabledValues || [];
   options.forEach(([value, label]) => {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.textContent = label;
     if (value === activeValue) btn.classList.add('active');
-    btn.addEventListener('click', async () => {
-      await onSelect(value);
-      Array.from(host.children).forEach((c) => c.classList.remove('active'));
-      btn.classList.add('active');
-    });
+    if (disabled.includes(value)) {
+      btn.disabled = true;
+    } else {
+      btn.addEventListener('click', async () => {
+        await onSelect(value);
+        Array.from(host.children).forEach((c) => c.classList.remove('active'));
+        btn.classList.add('active');
+      });
+    }
     host.appendChild(btn);
   });
 }
 
+// Background colour mode makes the accent colour the page background, and
+// the foreground (text/icons) is fixed light-on-colour or dark-on-colour
+// per accent (see the [data-color-mode='background'] CSS blocks) — Sand is
+// light enough that it only reads correctly with dark foreground text,
+// every other accent is dark enough that it only reads correctly with
+// light foreground text. So unlike normal Accent mode, Light/Dark/System
+// aren't a free choice here: force the one combination that actually reads
+// correctly and disable the other, rather than letting someone pick a
+// combination that comes out illegible. Called on initial render and again
+// whenever the accent or colour mode changes.
+async function renderThemeToggle(themeHost) {
+  const { accentName, theme, colourMode } = await getStoredThemeSettings();
+
+  if (colourMode !== 'background') {
+    memioBuildSegmentedControl(
+      themeHost,
+      [
+        ['dark', 'Dark'],
+        ['light', 'Light'],
+        ['system', 'System']
+      ],
+      theme,
+      async (value) => {
+        await patchThemeSettings({ theme: value });
+        const current = await getStoredThemeSettings();
+        applyAccentAndTheme(current.accentName, current.theme, current.colourMode);
+      }
+    );
+    return;
+  }
+
+  const forcedTheme = accentName === 'yellow' ? 'dark' : 'light';
+  if (theme !== forcedTheme) {
+    await patchThemeSettings({ theme: forcedTheme });
+    const current = await getStoredThemeSettings();
+    applyAccentAndTheme(current.accentName, current.theme, current.colourMode);
+  }
+
+  memioBuildSegmentedControl(
+    themeHost,
+    [
+      ['dark', 'Dark'],
+      ['light', 'Light']
+    ],
+    forcedTheme,
+    async (value) => {
+      await patchThemeSettings({ theme: value });
+      const current = await getStoredThemeSettings();
+      applyAccentAndTheme(current.accentName, current.theme, current.colourMode);
+    },
+    [forcedTheme === 'dark' ? 'light' : 'dark']
+  );
+}
+
 async function initSettingsPanel() {
-  const { accentName, theme, colourMode, autoSendOnSave } = await getStoredThemeSettings();
+  const { accentName, theme, colourMode, edges, autoSendOnSave } = await getStoredThemeSettings();
   applyAccentAndTheme(accentName, theme, colourMode);
+  applyEdges(edges);
 
   const swatchContainer = memioQ('swatches');
   const colourModeHost = memioQ('colourModeToggle');
   const themeHost = memioQ('themeToggle');
+  const edgesHost = memioQ('edgesToggle');
   const autoSendToggle = memioQ('autoSendToggle');
   const settingsBtn = memioQ('settingsBtn');
   const overlay = memioQ('settingsOverlay');
@@ -145,6 +216,9 @@ async function initSettingsPanel() {
         applyAccentAndTheme(current.accentName, current.theme, current.colourMode);
         Array.from(swatchContainer.querySelectorAll('.swatch')).forEach((c) => c.classList.remove('active'));
         btn.classList.add('active');
+        // Background mode's forced Light/Dark pairing depends on which
+        // accent is selected (see renderThemeToggle) — re-evaluate it.
+        await renderThemeToggle(themeHost);
       });
 
       const swatchLabel = document.createElement('span');
@@ -157,20 +231,7 @@ async function initSettingsPanel() {
     });
   }
 
-  memioBuildSegmentedControl(
-    themeHost,
-    [
-      ['dark', 'Dark'],
-      ['light', 'Light'],
-      ['system', 'System']
-    ],
-    theme,
-    async (value) => {
-      await patchThemeSettings({ theme: value });
-      const current = await getStoredThemeSettings();
-      applyAccentAndTheme(current.accentName, current.theme, current.colourMode);
-    }
-  );
+  await renderThemeToggle(themeHost);
 
   memioBuildSegmentedControl(
     colourModeHost,
@@ -183,6 +244,22 @@ async function initSettingsPanel() {
       await patchThemeSettings({ colourMode: value });
       const current = await getStoredThemeSettings();
       applyAccentAndTheme(current.accentName, current.theme, current.colourMode);
+      // Switching into/out of Background mode changes whether Light/Dark/
+      // System is a free choice or a forced pairing — re-evaluate it.
+      await renderThemeToggle(themeHost);
+    }
+  );
+
+  memioBuildSegmentedControl(
+    edgesHost,
+    [
+      ['soft', 'Soft'],
+      ['sharp', 'Sharp']
+    ],
+    edges,
+    async (value) => {
+      await patchThemeSettings({ edges: value });
+      applyEdges(value);
     }
   );
 

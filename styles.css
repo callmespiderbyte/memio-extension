@@ -18,8 +18,8 @@
   /* Level 1 — primitives */
   --color-green-light: #3D8B37;
   --color-green-dark: #4CAF50;
-  --color-yellow-light: #D4A017;
-  --color-yellow-dark: #F5C518;
+  --color-yellow-light: #FFB93E;
+  --color-yellow-dark: #FFB93E;
   --color-coral-light: #C0392B;
   --color-coral-dark: #E8513A;
   --color-blue-light: #1A4A6B;
@@ -58,9 +58,9 @@
   /* Accent — overridden per [data-accent] below; these are the fallback
      (yellow, light mode) so nothing is unstyled before JS runs. */
   --accent: var(--color-yellow-light);
-  --accent-hover: #E6B229;
-  --accent-subtle: rgba(212, 160, 23, 0.12);
-  --accent-focus: rgba(212, 160, 23, 0.35);
+  --accent-hover: #E6A72F;
+  --accent-subtle: rgba(255, 185, 62, 0.12);
+  --accent-focus: rgba(255, 185, 62, 0.35);
   --accent-text: #1A1A1A;
 
   /* Effects — also not in the original token list, but needed to keep the
@@ -70,6 +70,37 @@
      per-accent variants the way the tokens above do. */
   --scrim: rgba(0, 0, 0, 0.6);
   --shadow-color: rgba(0, 0, 0, 0.3);
+
+  /* Edges (Soft/Sharp) — these are the Soft defaults, so nothing is
+     unstyled before JS runs (same reasoning as the accent fallback above).
+     Every border-radius in this file references one of these tokens. */
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-pill: 999px;
+  --radius-icon: 50%;
+}
+
+/* Edges mapping — Soft is the default above, restated explicitly here so
+   both states are equally discoverable. Sharp collapses every token to 0
+   (or 0% for --radius-icon, so SVG rect rx/ry values relying on percentage
+   units still resolve correctly — see .icon-shape). */
+:host([data-edges='soft']) {
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-pill: 999px;
+  --radius-icon: 50%;
+}
+:host([data-edges='sharp']) {
+  --radius-xs: 0px;
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-pill: 0px;
+  --radius-icon: 0%;
 }
 
 /* Dark mode base values — system preference, unless a manual light choice
@@ -109,9 +140,9 @@
 /* ---- Accent mapping: light mode (default) ---- */
 :host([data-accent='yellow']) {
   --accent: var(--color-yellow-light);
-  --accent-hover: #E6B229;
-  --accent-subtle: rgba(212, 160, 23, 0.12);
-  --accent-focus: rgba(212, 160, 23, 0.35);
+  --accent-hover: #E6A72F;
+  --accent-subtle: rgba(255, 185, 62, 0.12);
+  --accent-focus: rgba(255, 185, 62, 0.35);
   --accent-text: #1A1A1A;
 }
 :host([data-accent='green']) {
@@ -157,9 +188,9 @@
 @media (prefers-color-scheme: dark) {
   :host(:not([data-theme='light'])[data-accent='yellow']) {
     --accent: var(--color-yellow-dark);
-    --accent-hover: #F7D03A;
-    --accent-subtle: rgba(245, 197, 24, 0.12);
-    --accent-focus: rgba(245, 197, 24, 0.35);
+    --accent-hover: #E6A72F;
+    --accent-subtle: rgba(255, 185, 62, 0.12);
+    --accent-focus: rgba(255, 185, 62, 0.35);
     --accent-text: #1A1A1A;
   }
   :host(:not([data-theme='light'])[data-accent='green']) {
@@ -202,9 +233,9 @@
 /* ---- Accent mapping: dark mode (manual override) ---- */
 :host([data-theme='dark'][data-accent='yellow']) {
   --accent: var(--color-yellow-dark);
-  --accent-hover: #F7D03A;
-  --accent-subtle: rgba(245, 197, 24, 0.12);
-  --accent-focus: rgba(245, 197, 24, 0.35);
+  --accent-hover: #E6A72F;
+  --accent-subtle: rgba(255, 185, 62, 0.12);
+  --accent-focus: rgba(255, 185, 62, 0.35);
   --accent-text: #1A1A1A;
 }
 :host([data-theme='dark'][data-accent='green']) {
@@ -282,8 +313,11 @@
   --text-primary: #F5F3EF;
   --text-secondary: rgba(245, 243, 239, 0.75);
   --text-muted: rgba(245, 243, 239, 0.6);
-  --bg-surface: color-mix(in srgb, var(--bg-base) 85%, white);
-  --bg-elevated: color-mix(in srgb, var(--bg-base) 75%, white);
+  /* Panels/cards stay the exact same colour and saturation as the page
+     background — only the modal scrim (which dims the exposed backdrop,
+     not the panel itself) and border hairlines provide separation. */
+  --bg-surface: var(--bg-base);
+  --bg-elevated: var(--bg-base);
   --border-subtle: color-mix(in srgb, var(--bg-base) 85%, white);
   --border-default: color-mix(in srgb, var(--bg-base) 65%, white);
   --accent: #F5F3EF;
@@ -299,8 +333,11 @@
   --text-primary: #141414;
   --text-secondary: rgba(20, 20, 20, 0.75);
   --text-muted: rgba(20, 20, 20, 0.6);
-  --bg-surface: color-mix(in srgb, var(--bg-base) 85%, black);
-  --bg-elevated: color-mix(in srgb, var(--bg-base) 75%, black);
+  /* Panels/cards stay the exact same colour and saturation as the page
+     background — only the modal scrim (which dims the exposed backdrop,
+     not the panel itself) and border hairlines provide separation. */
+  --bg-surface: var(--bg-base);
+  --bg-elevated: var(--bg-base);
   --border-subtle: color-mix(in srgb, var(--bg-base) 85%, black);
   --border-default: color-mix(in srgb, var(--bg-base) 65%, black);
   --accent: #141414;
@@ -312,6 +349,15 @@
 
 * {
   box-sizing: border-box;
+}
+
+/* Smooth transition when switching Edges (Soft/Sharp) — low-specificity so
+   any element with its own `transition:` declaration for other properties
+   (a handful of specific selectors further down) simply overrides this,
+   which is why those particular declarations also list border-radius
+   explicitly rather than relying on this fallback alone. */
+:host, :host * {
+  transition: border-radius 200ms ease;
 }
 
 :host {
@@ -348,7 +394,7 @@
   background: var(--bg-base);
   color: var(--text-primary);
   font-family: 'DM Sans', sans-serif;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.24);
   display: flex;
   flex-direction: column;
@@ -397,8 +443,6 @@
   color: var(--text-muted);
   margin: 2px 0 0;
   font-family: 'DM Sans', sans-serif;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
 }
 
 .nav-tab {
@@ -496,7 +540,7 @@
   font-size: 11px;
   color: var(--accent-text);
   background: var(--accent);
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   padding: 1px 6px;
   font-variant-numeric: tabular-nums;
 }
@@ -510,27 +554,41 @@
   letter-spacing: 0.08em;
 }
 
+/* Circular "cutout" icon buttons: each glyph is punched out of a solid
+   currentColor circle via an SVG <mask> (see .icon-circle in the markup),
+   rather than drawn on top of one — the glyph shape is a true hole, not a
+   color-matching trick, so it stays correct across hover/theme changes.
+   The close buttons override this with a fixed var(--accent) fill instead
+   of inheriting currentColor, so they stand out in the current theme
+   colour regardless of hover state. */
 .icon-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  width: 24px;
+  height: 24px;
   background: none;
   border: none;
   color: var(--text-muted);
-  font-size: 16px;
   cursor: pointer;
-  padding: 4px;
-  border-radius: 4px;
+  padding: 0;
   line-height: 1;
 }
 .icon-btn:hover {
   color: var(--text-primary);
 }
-.icon-btn-large {
-  font-size: 20px;
+.icon-circle {
+  display: block;
 }
-.icon-btn-small {
-  font-size: 13px;
+/* The cutout shape itself: an SVG <rect> (not <circle>) so its corner
+   rounding is CSS-controllable via rx/ry, following --radius-icon like
+   every other rounded element — Soft renders a full circle (50%), Sharp
+   collapses it to a square (0), keeping the toolbar icons in sync with
+   the Edges setting instead of being permanently circular. */
+.icon-shape {
+  rx: var(--radius-icon);
+  ry: var(--radius-icon);
+  transition: rx 200ms ease, ry 200ms ease;
 }
 
 .app-nav {
@@ -574,7 +632,7 @@
   min-width: 0;
   background: var(--bg-surface);
   border: 1px solid var(--border-default);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   color: var(--text-primary);
   font-family: 'DM Sans', sans-serif;
   font-size: 13px;
@@ -604,7 +662,7 @@
   justify-content: center;
   background: none;
   border: 1px solid var(--border-default);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   color: var(--text-muted);
   font-size: 16px;
   cursor: not-allowed;
@@ -623,13 +681,13 @@
   color: var(--text-primary);
   border: 1px solid var(--border-default);
   padding: 4px 8px;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   font-family: 'DM Sans', sans-serif;
   font-size: 11px;
   white-space: nowrap;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 120ms ease;
+  transition: opacity 120ms ease, border-radius 200ms ease;
   z-index: 20;
 }
 .wand-btn:hover::after {
@@ -648,20 +706,23 @@
   color: transparent;
   cursor: wait;
 }
-.wand-btn.spinner::after {
+/* Its own ::before, deliberately not sharing ::after with the tooltip above
+   — reusing that pseudo-element used to leak the tooltip's padding/border
+   onto this 12x12 box (::before/::after aren't covered by the page's
+   `* { box-sizing: border-box }` reset), stretching it into an oval that
+   spilled past the button instead of a small circle contained inside it. */
+.wand-btn.spinner::before {
   content: '';
   position: absolute;
   top: 50%;
   left: 50%;
-  right: auto;
-  bottom: auto;
   width: 12px;
   height: 12px;
   margin: -6px 0 0 -6px;
+  box-sizing: border-box;
   border: 2px solid var(--accent);
   border-top-color: transparent;
-  border-radius: 50%;
-  opacity: 1;
+  border-radius: var(--radius-icon);
   animation: memioSpin 600ms linear infinite;
 }
 
@@ -671,7 +732,7 @@
   resize: vertical;
   background: var(--bg-surface);
   border: 1px solid var(--border-default);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   color: var(--text-primary);
   font-family: 'DM Sans', sans-serif;
   font-size: 13px;
@@ -700,11 +761,39 @@
   opacity: 1;
 }
 
-.source-url {
+.source-url-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 11px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.source-url-toggle input[type='checkbox'] {
+  accent-color: var(--accent);
+  width: 13px;
+  height: 13px;
+  cursor: pointer;
+}
+.source-url-toggle[hidden] {
+  display: none;
+}
+
+/* Shows the exact "Source: <url>" line that will land in the note, so
+   checking the box above has a visible, honest preview instead of a blind
+   promise. */
+.source-url-preview {
   font-size: 11px;
   color: var(--text-muted);
   word-break: break-all;
-  min-height: 14px;
+  margin: 0;
+  padding: 4px 6px;
+  background: var(--bg-surface);
+  border-radius: var(--radius-xs);
+}
+.source-url-preview[hidden] {
+  display: none;
 }
 
 .tag-input,
@@ -712,7 +801,7 @@
 .search-input {
   background: var(--bg-surface);
   border: 1px solid var(--border-default);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   color: var(--text-primary);
   font-family: 'DM Sans', sans-serif;
   font-size: 13px;
@@ -776,16 +865,23 @@
   background: var(--accent);
   color: var(--accent-text);
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-pill);
   padding: 8px 12px;
   font-family: 'DM Sans', sans-serif;
   font-weight: 700;
   font-size: 13px;
   cursor: pointer;
-  transition: background-color 120ms ease, transform 120ms ease;
+  transition: background-color 120ms ease, transform 120ms ease, border-radius 200ms ease;
 }
 .btn-primary:hover {
   background: var(--accent-hover);
+}
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.btn-primary:disabled:hover {
+  background: var(--accent);
 }
 .btn-primary.pulse {
   transform: scale(1.04);
@@ -805,7 +901,7 @@ a.btn-primary {
   background: var(--bg-elevated);
   color: var(--text-primary);
   border: 1px solid var(--border-default);
-  border-radius: 4px;
+  border-radius: var(--radius-pill);
   padding: 8px 12px;
   font-family: 'DM Sans', sans-serif;
   font-size: 13px;
@@ -841,6 +937,10 @@ a.btn-primary {
   flex: 1;
   min-width: 80px;
 }
+.filter-select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
 
 .tag-filter {
   position: relative;
@@ -866,7 +966,7 @@ a.btn-primary {
   margin-top: 4px;
   background: var(--bg-elevated);
   border: 1px solid var(--border-default);
-  border-radius: 4px;
+  border-radius: var(--radius-md);
   z-index: 10;
   padding: 4px;
   gap: 2px;
@@ -904,7 +1004,7 @@ a.btn-primary {
   color: var(--text-primary);
   font-family: 'DM Sans', sans-serif;
   cursor: pointer;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
 }
 .tag-filter-option:hover {
   background: var(--bg-surface);
@@ -925,12 +1025,12 @@ a.btn-primary {
 .memo-card {
   background: var(--bg-surface);
   border: 1px solid var(--border-default);
-  border-radius: 4px;
+  border-radius: var(--radius-md);
   padding: 8px;
   display: flex;
   flex-direction: column;
   gap: 4px;
-  transition: opacity 200ms ease;
+  transition: opacity 200ms ease, border-radius 200ms ease;
 }
 .memo-card.fade-out {
   opacity: 0;
@@ -972,7 +1072,7 @@ a.btn-primary {
   color: var(--accent);
   font-size: 11px;
   padding: 2px 6px;
-  border-radius: 4px;
+  border-radius: var(--radius-pill);
   animation: memioFadeIn 150ms ease;
   font-family: 'DM Sans', sans-serif;
 }
@@ -985,7 +1085,7 @@ a.btn-primary {
 .sent-badge {
   font-size: 11px;
   padding: 2px 6px;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   background: var(--border-subtle);
   color: var(--text-muted);
   font-family: 'DM Sans', sans-serif;
@@ -1066,7 +1166,7 @@ a.btn-primary {
   right: 16px;
   width: 32px;
   height: 32px;
-  border-radius: 50%;
+  border-radius: var(--radius-icon);
   border: 1px solid var(--border-default);
   background: var(--bg-surface);
   color: var(--accent);
@@ -1096,7 +1196,7 @@ a.btn-primary {
   min-width: 220px;
   background: var(--bg-surface);
   border: 1px solid var(--border-default);
-  border-radius: 4px;
+  border-radius: var(--radius-md);
   padding: 12px;
   z-index: 20;
 }
@@ -1156,7 +1256,7 @@ a.btn-primary {
   background: var(--accent-subtle);
   color: var(--accent);
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-pill);
   font-size: 11px;
   padding: 4px 8px;
   cursor: pointer;
@@ -1202,7 +1302,7 @@ a.btn-primary {
   margin: -5px 0 0 -5px;
   border: 2px solid var(--accent);
   border-top-color: transparent;
-  border-radius: 50%;
+  border-radius: var(--radius-icon);
   animation: memioSpin 600ms linear infinite;
 }
 
@@ -1219,7 +1319,7 @@ a.btn-primary {
   margin-bottom: 4px;
   background: var(--bg-elevated);
   border: 1px solid var(--border-default);
-  border-radius: 4px;
+  border-radius: var(--radius-md);
   display: none;
   flex-direction: column;
   overflow: hidden;
@@ -1266,7 +1366,7 @@ a.btn-primary {
   display: inline-flex;
   align-items: center;
   padding: 2px 8px;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   font-weight: 700;
 }
 .send-status.success {
@@ -1308,7 +1408,7 @@ a.btn-primary {
 .settings-panel {
   background: var(--bg-surface);
   border: 1px solid var(--border-default);
-  border-radius: 4px;
+  border-radius: var(--radius-md);
   padding: 16px;
   width: 380px;
   display: flex;
@@ -1322,7 +1422,7 @@ a.btn-primary {
 }
 .settings-title {
   font-family: 'Playfair Display', serif;
-  font-size: 16px;
+  font-size: 20px;
   margin: 0;
 }
 
@@ -1337,7 +1437,6 @@ a.btn-primary {
   overflow: hidden;
 }
 .help-panel .settings-title {
-  font-size: 20px;
   color: var(--text-primary);
 }
 .help-faq-scroll {
@@ -1383,7 +1482,7 @@ a.btn-primary {
   flex-shrink: 0;
   background: var(--bg-surface);
   border: 1px solid var(--border-default);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   overflow: hidden;
 }
 .help-section-header {
@@ -1530,10 +1629,37 @@ a.btn-primary {
   gap: 6px;
   background: var(--bg-elevated);
   border: 1px solid var(--border-subtle);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   padding: 12px;
 }
 .settings-group .settings-label {
+  margin-top: 0;
+}
+
+/* Theme tab's two grouped sections (Colour, Style) — plain grouping, no
+   card background, distinct from .settings-group's shaded box treatment. */
+#settingsSectionTheme {
+  gap: 16px;
+}
+.theme-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.theme-group-label {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  margin: 0;
+}
+.theme-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.theme-item .settings-label {
   margin-top: 0;
 }
 .configure-empty-state {
@@ -1557,7 +1683,7 @@ a.btn-primary {
 .swatch {
   width: 28px;
   height: 28px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   border: 2px solid transparent;
   cursor: pointer;
   padding: 0;
@@ -1575,7 +1701,7 @@ a.btn-primary {
 .segmented-control {
   display: flex;
   border: 1px solid var(--border-default);
-  border-radius: 4px;
+  border-radius: var(--radius-pill);
   overflow: hidden;
 }
 .segmented-control button {
@@ -1599,6 +1725,13 @@ a.btn-primary {
   color: var(--accent);
   font-weight: 700;
 }
+.segmented-control button:disabled {
+  color: var(--border-default);
+  cursor: not-allowed;
+}
+.segmented-control button:disabled:hover {
+  color: var(--border-default);
+}
 
 .connector-sections {
   display: flex;
@@ -1609,7 +1742,7 @@ a.btn-primary {
 .connector-section {
   background: var(--bg-surface);
   border: 1px solid var(--border-default);
-  border-radius: 4px;
+  border-radius: var(--radius-md);
   overflow: hidden;
 }
 
@@ -1635,10 +1768,14 @@ a.btn-primary {
   align-items: center;
   gap: 8px;
 }
+.connector-type-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+}
 .connector-status-dot {
   width: 8px;
   height: 8px;
-  border-radius: 50%;
+  border-radius: var(--radius-icon);
   flex-shrink: 0;
   background: var(--text-muted);
 }
@@ -1674,7 +1811,7 @@ a.btn-primary {
   color: var(--text-muted);
   background: var(--bg-base);
   border: 1px solid var(--border-default);
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   padding: 2px 6px;
 }
 .connector-section.coming-soon .connector-header {
@@ -1705,7 +1842,7 @@ a.btn-primary {
    clearly. */
 .connector-subsection {
   border: 1px solid var(--border-subtle);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
 }
 .connector-subheader {
   width: 100%;
@@ -1755,7 +1892,7 @@ a.btn-primary {
   gap: 8px;
   padding: 6px 8px;
   background: var(--bg-elevated);
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   cursor: grab;
 }
 .destination-drag-handle {
@@ -1780,7 +1917,7 @@ a.btn-primary {
   letter-spacing: 0.04em;
   color: var(--accent-text);
   background: var(--accent);
-  border-radius: 4px;
+  border-radius: var(--radius-pill);
   padding: 1px 6px;
   flex-shrink: 0;
 }
@@ -1850,7 +1987,7 @@ a.btn-primary {
    from the type-level .connector-section/.connector-header. */
 .instance-row {
   border: 1px solid var(--border-subtle);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   overflow: hidden;
 }
 .instance-row + .instance-row {
@@ -1900,7 +2037,7 @@ a.btn-primary {
 .instance-rename-input {
   background: var(--bg-surface);
   border: 1px solid var(--accent);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   color: var(--text-primary);
   font-family: 'DM Sans', sans-serif;
   font-size: 12px;
@@ -1964,7 +2101,7 @@ a.btn-primary {
   width: 280px;
   background: var(--bg-elevated);
   border: 1px solid var(--border-default);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   padding: 12px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
   z-index: 20;
@@ -2047,12 +2184,12 @@ a.btn-primary {
   -webkit-appearance: none;
   width: 32px;
   height: 18px;
-  border-radius: 9px;
+  border-radius: var(--radius-pill);
   background: var(--border-default);
   position: relative;
   cursor: pointer;
   flex-shrink: 0;
-  transition: background-color 150ms ease;
+  transition: background-color 150ms ease, border-radius 200ms ease;
 }
 .toggle-switch::before {
   content: '';
@@ -2061,9 +2198,9 @@ a.btn-primary {
   left: 2px;
   width: 14px;
   height: 14px;
-  border-radius: 50%;
+  border-radius: var(--radius-icon);
   background: var(--text-primary);
-  transition: transform 150ms ease;
+  transition: transform 150ms ease, border-radius 200ms ease;
 }
 .toggle-switch:checked {
   background: var(--accent);
@@ -2092,6 +2229,35 @@ a.btn-primary {
   line-height: 1.5;
   font-family: 'DM Sans', sans-serif;
 }
+
+.donate-subline {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-muted);
+  margin: 0;
+  line-height: 1.5;
+}
+.donate-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.donate-body p {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  color: var(--text-primary);
+  margin: 0;
+  line-height: 1.6;
+}
+.donate-footer {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  font-style: italic;
+  color: var(--text-muted);
+  margin: 0;
+  text-align: center;
+}
 .instructions-steps {
   margin: 4px 0;
   padding-left: 18px;
@@ -2114,7 +2280,7 @@ a.btn-primary {
   width: 100%;
   background: var(--bg-base);
   border: 1px solid var(--border-default);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   color: var(--text-primary);
   font-family: 'DM Sans', sans-serif;
   font-size: 13px;
@@ -2146,7 +2312,7 @@ a.btn-primary {
 .connection-status.connected,
 .connection-status.failed {
   padding: 2px 8px;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   font-weight: 700;
 }
 .connection-status.connected {
@@ -2188,7 +2354,7 @@ a.btn-primary {
 .tour-welcome-modal {
   background: var(--bg-surface);
   border: 1px solid var(--border-default);
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   padding: 28px;
   max-width: 320px;
   display: flex;
@@ -2252,7 +2418,7 @@ a.btn-primary {
 }
 .memio-tour-border {
   box-shadow: 0 0 0 2px var(--accent);
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
 }
 
 .tour-tooltip {
@@ -2260,7 +2426,7 @@ a.btn-primary {
   z-index: 302;
   background: var(--bg-elevated);
   border: 1px solid var(--border-default);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   padding: 14px 16px;
   max-width: 260px;
   font-family: 'DM Sans', sans-serif;
@@ -2312,7 +2478,7 @@ a.btn-primary {
 .tour-dot {
   width: 6px;
   height: 6px;
-  border-radius: 50%;
+  border-radius: var(--radius-icon);
   background: var(--border-default);
 }
 .tour-dot.active {
@@ -2343,6 +2509,7 @@ a.btn-primary {
   justify-content: center;
   z-index: 500;
   text-align: center;
+  border-radius: var(--radius-lg);
 }
 .milestone-overlay:not([hidden]) {
   display: flex;
@@ -2394,7 +2561,7 @@ a.btn-primary {
   gap: 8px;
   background: var(--bg-elevated);
   border: 1px solid var(--border-default);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   padding: 10px 14px;
 }
 .settings-banner:not([hidden]) {

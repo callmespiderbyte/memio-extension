@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Memio",
-  "version": "1.5.0",
-  "description": "A lightweight, no-account tool for saving text worth keeping while you browse.",
+  "version": "1.5.1",
+  "description": "Save the ideas that matter, quickly.",
   "action": {
     "default_title": "Memio",
     "default_icon": {

@@ -48,7 +48,7 @@ chrome.runtime.onInstalled.addListener(async () => {
   const { memio_settings } = await chrome.storage.sync.get('memio_settings');
   if (!memio_settings) {
     await chrome.storage.sync.set({
-      memio_settings: { accentName: 'yellow', theme: 'system' }
+      memio_settings: { accentName: 'yellow', theme: 'light', colourMode: 'accent' }
     });
   }
 

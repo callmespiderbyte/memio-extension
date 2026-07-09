@@ -42,6 +42,18 @@
   // Settings overlay closes and whenever the New tab is (re)selected.
   let refreshDestinationPreviewFull = null;
 
+  // Re-reads window.getSelection() and refreshes the New-view textarea if
+  // it's safe to do so — set once initMemoView() defines it. The content
+  // script stays resident in the page after the first injection; reopening
+  // the window on a later click just toggles visibility (see toggleWindow)
+  // without re-running initMemoView(), so without this, highlighting new
+  // text on the same page and reopening kept showing whatever was
+  // highlighted the very first time, until a full page reload forced a
+  // fresh injection. Called from toggleWindow() every time the window is
+  // shown (not on the initial creation, which already captures correctly
+  // via capturedPageContext below).
+  let refreshCapturedSelection = null;
+
   // Captured synchronously the instant this script is injected — before any
   // shadow-DOM setup, network fetches (fonts/styles.css), or other init
   // work runs. initMemoView() reads highlighted text from this, not a fresh
@@ -179,18 +191,67 @@
       </div>
       <div class="header-text">
         <h1 class="wordmark">Memio</h1>
-        <p class="header-subline">SAVE WHAT MATTERS</p>
+        <p class="header-subline">Save the ideas that matter, quickly.</p>
       </div>
     </div>
     <div class="header-right">
-      <button type="button" class="icon-btn icon-btn-large" id="settingsBtn" aria-label="Settings" title="Settings">&#9881;</button>
-      <button type="button" class="icon-btn" id="donateBtn" aria-label="Support Memio" title="Support Memio">
-        <svg class="heart-icon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true">
-          <path d="M12,21.35 L10.55,20.03 C5.4,15.36 2,12.28 2,8.5 C2,5.42 4.42,3 7.5,3 C9.24,3 10.91,3.81 12,5.09 C13.09,3.81 14.76,3 16.5,3 C19.58,3 22,5.42 22,8.5 C22,12.28 18.6,15.36 13.45,20.04 L12,21.35 Z"/>
+      <button type="button" class="icon-btn" id="settingsBtn" aria-label="Settings" title="Settings">
+        <svg class="icon-circle" viewBox="0 0 30 30" width="24" height="24" aria-hidden="true">
+          <mask id="mIconSettings" maskUnits="userSpaceOnUse" x="0" y="0" width="30" height="30">
+            <rect width="30" height="30" fill="white"/>
+            <g stroke="black" stroke-width="2" stroke-linecap="round">
+              <line x1="8" y1="10" x2="22" y2="10"/>
+              <line x1="8" y1="15" x2="22" y2="15"/>
+              <line x1="8" y1="20" x2="22" y2="20"/>
+            </g>
+            <g fill="black">
+              <circle cx="12" cy="10" r="2.4"/>
+              <circle cx="19" cy="15" r="2.4"/>
+              <circle cx="15" cy="20" r="2.4"/>
+            </g>
+          </mask>
+          <rect x="0" y="0" width="30" height="30" class="icon-shape" fill="currentColor" mask="url(#mIconSettings)"/>
         </svg>
       </button>
-      <button type="button" class="icon-btn icon-btn-small" id="helpBtn" aria-label="Help" title="Help">?</button>
-      <button type="button" class="icon-btn icon-btn-large" id="closeWindowBtn" aria-label="Close" title="Close">&times;</button>
+      <button type="button" class="icon-btn" id="donateBtn" aria-label="Support Memio" title="Support Memio">
+        <svg class="icon-circle" viewBox="0 0 30 30" width="24" height="24" aria-hidden="true">
+          <mask id="mIconDonate" maskUnits="userSpaceOnUse" x="0" y="0" width="30" height="30">
+            <rect width="30" height="30" fill="white"/>
+            <path fill="black" transform="translate(7,7) scale(0.667)" d="M12,21.35 L10.55,20.03 C5.4,15.36 2,12.28 2,8.5 C2,5.42 4.42,3 7.5,3 C9.24,3 10.91,3.81 12,5.09 C13.09,3.81 14.76,3 16.5,3 C19.58,3 22,5.42 22,8.5 C22,12.28 18.6,15.36 13.45,20.04 L12,21.35 Z"/>
+          </mask>
+          <rect x="0" y="0" width="30" height="30" class="icon-shape" fill="currentColor" mask="url(#mIconDonate)"/>
+        </svg>
+      </button>
+      <button type="button" class="icon-btn" id="discordBtn" aria-label="Join the Memio community" title="Join the Memio community">
+        <svg class="icon-circle" viewBox="0 0 30 30" width="24" height="24" aria-hidden="true">
+          <mask id="mIconDiscord" maskUnits="userSpaceOnUse" x="0" y="0" width="30" height="30">
+            <rect width="30" height="30" fill="white"/>
+            <path fill="black" transform="translate(7,7) scale(0.667)" d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7362 19.7362 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z"/>
+          </mask>
+          <rect x="0" y="0" width="30" height="30" class="icon-shape" fill="currentColor" mask="url(#mIconDiscord)"/>
+        </svg>
+      </button>
+      <button type="button" class="icon-btn" id="helpBtn" aria-label="Help" title="Help">
+        <svg class="icon-circle" viewBox="0 0 30 30" width="24" height="24" aria-hidden="true">
+          <mask id="mIconHelp" maskUnits="userSpaceOnUse" x="0" y="0" width="30" height="30">
+            <rect width="30" height="30" fill="white"/>
+            <text x="15" y="16" text-anchor="middle" dominant-baseline="central" font-family="'DM Sans', Arial, sans-serif" font-weight="700" font-size="16" fill="black">?</text>
+          </mask>
+          <rect x="0" y="0" width="30" height="30" class="icon-shape" fill="currentColor" mask="url(#mIconHelp)"/>
+        </svg>
+      </button>
+      <button type="button" class="icon-btn" id="closeWindowBtn" aria-label="Close" title="Close">
+        <svg class="icon-circle" viewBox="0 0 30 30" width="24" height="24" aria-hidden="true">
+          <mask id="mIconClose" maskUnits="userSpaceOnUse" x="0" y="0" width="30" height="30">
+            <rect width="30" height="30" fill="white"/>
+            <g stroke="black" stroke-width="2.5" stroke-linecap="round">
+              <line x1="10" y1="10" x2="20" y2="20"/>
+              <line x1="20" y1="10" x2="10" y2="20"/>
+            </g>
+          </mask>
+          <rect x="0" y="0" width="30" height="30" class="icon-shape" fill="var(--accent)" mask="url(#mIconClose)"/>
+        </svg>
+      </button>
     </div>
   </div>
 
@@ -219,13 +280,18 @@
       <p class="title-hint" id="wandError" hidden></p>
       <textarea id="memoText" class="memo-textarea" placeholder="Type or paste anything worth keeping.
 Or highlight text on any page first — it auto-populates here when you open Memio."></textarea>
-      <div class="source-url" id="sourceUrl"></div>
+      <label class="source-url-toggle" id="sourceUrlToggleRow" hidden>
+        <input type="checkbox" id="saveSourceUrlCheckbox" checked />
+        Attach this page's URL to memo
+      </label>
+      <p class="source-url-preview" id="sourceUrlPreview" hidden></p>
       <div id="tagInputField" class="tag-input"></div>
       <div class="destination-preview" id="destinationPreview" hidden>
         <select class="filter-select destination-preview-select" id="destinationPreviewVault"></select>
         <span class="destination-preview-arrow">&rarr;</span>
         <select class="filter-select destination-preview-select" id="destinationPreviewFolder"></select>
       </div>
+      <p class="send-popover-message" id="destinationPreviewEmptyHelper" hidden></p>
       <button type="button" class="btn-primary" id="saveBtn">Save it</button>
       <p class="saved-confirm" id="savedConfirm">Saved.</p>
     </main>
@@ -322,14 +388,28 @@ Or highlight text on any page first — it auto-populates here when you open Mem
     </div>
 
     <div class="settings-section" id="settingsSectionTheme" hidden>
-      <p class="settings-label">Accent colour</p>
-      <div class="swatches" id="swatches"></div>
-
-      <p class="settings-label">Colour applies to</p>
-      <div class="segmented-control" id="colourModeToggle"></div>
-
-      <p class="settings-label">Appearance</p>
-      <div class="segmented-control" id="themeToggle"></div>
+      <div class="theme-group">
+        <p class="theme-group-label">Colour</p>
+        <div class="theme-item">
+          <p class="settings-label">Accent colour</p>
+          <div class="swatches" id="swatches"></div>
+        </div>
+        <div class="theme-item">
+          <p class="settings-label">Colour applies to</p>
+          <div class="segmented-control" id="colourModeToggle"></div>
+        </div>
+      </div>
+      <div class="theme-group">
+        <p class="theme-group-label">Style</p>
+        <div class="theme-item">
+          <p class="settings-label">Appearance</p>
+          <div class="segmented-control" id="themeToggle"></div>
+        </div>
+        <div class="theme-item">
+          <p class="settings-label">Edges</p>
+          <div class="segmented-control" id="edgesToggle"></div>
+        </div>
+      </div>
     </div>
   </div>
   </div>
@@ -340,13 +420,20 @@ Or highlight text on any page first — it auto-populates here when you open Mem
         <h2 class="settings-title">Support Memio</h2>
         <button class="btn-secondary" id="closeDonateBtn" type="button">Close</button>
       </div>
-      <p class="instructions-text">Memio is free and will stay free. If it's saving you time or brain space, a small donation keeps it going. But no pressure! I have a day-job, so this is just for fun; but every bit of support will be invested into these small builds, and I hope they continue being helpful. :)</p>
+      <p class="donate-subline">Your support is totally voluntary.<br>Memio is free, and will stay free, forever.</p>
+      <div class="donate-body">
+        <p>Memio started on a beach in Sardinia. I kept having thoughts I couldn't capture fast enough — the kind that feel like gold in the moment and are gone by the time you find something to write them on. I wanted something that lived in the browser, connected to my existing knowledge system, and got out of the way.</p>
+        <p>So I built it. On holiday. In a week.</p>
+        <p>The name is a small homage to Italy: "Memo" traces back to the Latin "memorandum", or something worth remembering; and "io" means "I", or "mine", in Italian. That gives us "Memio", or some version of "my memory."</p>
+        <p>It's free and will stay free. If it's useful to you, a small donation keeps it going — but no pressure at all. This is a labour of love, and it'll stay that way regardless.</p>
+      </div>
       <a class="btn-primary donate-link" href="https://pos.snapscan.io/qr/gRXfe6NG" target="_blank" rel="noopener noreferrer">
         <svg class="heart-icon" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true">
           <path d="M12,21.35 L10.55,20.03 C5.4,15.36 2,12.28 2,8.5 C2,5.42 4.42,3 7.5,3 C9.24,3 10.91,3.81 12,5.09 C13.09,3.81 14.76,3 16.5,3 C19.58,3 22,5.42 22,8.5 C22,12.28 18.6,15.36 13.45,20.04 L12,21.35 Z"/>
         </svg>
         Donate
       </a>
+      <p class="donate-footer">Made on a beach. Shipped from Hamburg.</p>
     </div>
   </div>
 
@@ -354,7 +441,18 @@ Or highlight text on any page first — it auto-populates here when you open Mem
     <div class="settings-panel help-panel">
       <div class="settings-header">
         <h2 class="settings-title">Help</h2>
-        <button type="button" class="icon-btn icon-btn-large" id="closeHelpBtn" aria-label="Close" title="Close">&times;</button>
+        <button type="button" class="icon-btn" id="closeHelpBtn" aria-label="Close" title="Close">
+          <svg class="icon-circle" viewBox="0 0 30 30" width="24" height="24" aria-hidden="true">
+            <mask id="mIconCloseHelp" maskUnits="userSpaceOnUse" x="0" y="0" width="30" height="30">
+              <rect width="30" height="30" fill="white"/>
+              <g stroke="black" stroke-width="2.5" stroke-linecap="round">
+                <line x1="10" y1="10" x2="20" y2="20"/>
+                <line x1="20" y1="10" x2="10" y2="20"/>
+              </g>
+            </mask>
+            <rect x="0" y="0" width="30" height="30" class="icon-shape" fill="var(--accent)" mask="url(#mIconCloseHelp)"/>
+          </svg>
+        </button>
       </div>
       <div class="help-faq-scroll" id="helpFaqScroll"></div>
       <div class="help-feedback-footer">
@@ -726,13 +824,16 @@ Or highlight text on any page first — it auto-populates here when you open Mem
     const wandError = memioQ('wandError');
     const wandBtn = memioQ('generateTitleBtn');
     const textarea = memioQ('memoText');
-    const sourceUrlEl = memioQ('sourceUrl');
+    const sourceUrlToggleRow = memioQ('sourceUrlToggleRow');
+    const saveSourceUrlCheckbox = memioQ('saveSourceUrlCheckbox');
+    const sourceUrlPreview = memioQ('sourceUrlPreview');
     const saveBtn = memioQ('saveBtn');
     const tagInputField = memioQ('tagInputField');
     const savedConfirm = memioQ('savedConfirm');
     const destinationPreview = memioQ('destinationPreview');
     const destinationPreviewVault = memioQ('destinationPreviewVault');
     const destinationPreviewFolder = memioQ('destinationPreviewFolder');
+    const destinationPreviewEmptyHelper = memioQ('destinationPreviewEmptyHelper');
 
     const draft = await getDraft();
     let url;
@@ -743,12 +844,51 @@ Or highlight text on any page first — it auto-populates here when you open Mem
       textarea.value = draft.text || '';
       initialTags = draft.tags || [];
       url = draft.url || '';
+      saveSourceUrlCheckbox.checked = draft.saveSourceUrl !== false;
     } else {
       textarea.value = capturedPageContext.text;
       url = capturedPageContext.url;
+      // Pre-populated from a page highlight -> the URL is clearly relevant,
+      // default to attaching it. Started from a blank box -> this is just a
+      // standalone thought, default to leaving it off.
+      saveSourceUrlCheckbox.checked = !!capturedPageContext.text.trim();
     }
-    sourceUrlEl.textContent = url;
-    sourceUrlEl.dataset.url = url;
+    sourceUrlToggleRow.hidden = !url;
+
+    // Preview of exactly what gets attached to the note — "Source: <url>" is
+    // the literal line every connector's send format actually writes (see
+    // memioBuildObsidianAppendBlock / the Notion metaLine builders), so
+    // there's no surprise between what's shown here and what lands there.
+    function refreshSourceUrlPreview() {
+      const show = !!url && saveSourceUrlCheckbox.checked;
+      sourceUrlPreview.hidden = !show;
+      sourceUrlPreview.textContent = show ? `Source: ${url}` : '';
+    }
+    refreshSourceUrlPreview();
+
+    // Re-checks the page's current selection when the window is reopened
+    // (see the module-level refreshCapturedSelection comment for why this
+    // is needed at all). Only overwrites the textarea if it still holds
+    // exactly what was captured last time — if the user typed/edited
+    // anything, or a real draft was loaded instead, leave it alone.
+    refreshCapturedSelection = () => {
+      const freshText = window.getSelection ? window.getSelection().toString() : '';
+      const freshUrl = location.href;
+      const untouched = textarea.value === capturedPageContext.text;
+
+      capturedPageContext.text = freshText;
+      capturedPageContext.url = freshUrl;
+
+      if (!untouched || !freshText.trim()) return;
+
+      textarea.value = freshText;
+      url = freshUrl;
+      sourceUrlToggleRow.hidden = !url;
+      saveSourceUrlCheckbox.checked = !!freshText.trim();
+      refreshSourceUrlPreview();
+      persistDraft();
+      refreshWandButton();
+    };
 
     let draftTimer = null;
     const persistDraft = () => {
@@ -756,12 +896,23 @@ Or highlight text on any page first — it auto-populates here when you open Mem
       draftTimer = setTimeout(() => {
         const tags = tagWidget.getTags();
         if (titleInput.value.trim() || textarea.value.trim() || tags.length) {
-          saveDraft({ title: titleInput.value, text: textarea.value, tags, url: sourceUrlEl.dataset.url || '' });
+          saveDraft({
+            title: titleInput.value,
+            text: textarea.value,
+            tags,
+            url,
+            saveSourceUrl: saveSourceUrlCheckbox.checked
+          });
         } else {
           clearDraft();
         }
       }, 400);
     };
+
+    saveSourceUrlCheckbox.addEventListener('change', () => {
+      refreshSourceUrlPreview();
+      persistDraft();
+    });
 
     let refreshDestinationPreview = null;
     const tagWidget = memioCreateTagInput(tagInputField, initialTags, () => {
@@ -779,6 +930,7 @@ Or highlight text on any page first — it auto-populates here when you open Mem
       const enabledInstances = autoSendOnSave ? await memioGetEnabledConnectors() : [];
       if (!autoSendOnSave || enabledInstances.length === 0) {
         destinationPreview.hidden = true;
+        destinationPreviewEmptyHelper.hidden = true;
         return;
       }
 
@@ -812,9 +964,38 @@ Or highlight text on any page first — it auto-populates here when you open Mem
       function refreshFolder(vaultJustChanged) {
         const inst = enabledInstances.find((i) => i.id === destinationPreviewVault.value);
         const config = instanceConfig(inst);
+        const def = MEMIO_CONNECTOR_DEFS.find((d) => d.id === inst.typeId);
         const destinations = memioGetDestinationsForConnector(config, inst.typeId);
 
         destinationPreviewFolder.innerHTML = '';
+
+        if (destinations.length === 0) {
+          const option = document.createElement('option');
+          option.textContent = `No ${def.destinationNounPlural} configured`;
+          destinationPreviewFolder.appendChild(option);
+          destinationPreviewFolder.disabled = true;
+
+          destinationPreviewEmptyHelper.innerHTML = '';
+          destinationPreviewEmptyHelper.appendChild(document.createTextNode(`Add a ${def.destinationNoun} under `));
+          const link = document.createElement('a');
+          link.href = '#';
+          link.textContent = 'Settings → Configure';
+          link.addEventListener('click', async (e) => {
+            e.preventDefault();
+            memioOpenSettingsOverlay();
+            await memioOpenConfigureDestinations(inst.typeId, inst.id);
+          });
+          destinationPreviewEmptyHelper.appendChild(link);
+          destinationPreviewEmptyHelper.appendChild(document.createTextNode(' first.'));
+          destinationPreviewEmptyHelper.hidden = false;
+
+          destinationPreviewOverride = { typeId: inst.typeId, instanceId: inst.id, name: inst.name, destination: undefined };
+          return;
+        }
+
+        destinationPreviewFolder.disabled = false;
+        destinationPreviewEmptyHelper.hidden = true;
+
         destinations.forEach((d, i) => {
           const option = document.createElement('option');
           option.value = String(i);
@@ -903,7 +1084,7 @@ Or highlight text on any page first — it auto-populates here when you open Mem
 
       wandBtn.classList.add('spinner');
       try {
-        const generated = await memioGenerateTitle(textarea.value.trim(), tagWidget.getTags(), sourceUrlEl.dataset.url || '');
+        const generated = await memioGenerateTitle(textarea.value.trim(), tagWidget.getTags(), url || '');
         titleInput.value = generated;
         clearTitleInvalid();
         persistDraft();
@@ -933,7 +1114,7 @@ Or highlight text on any page first — it auto-populates here when you open Mem
         text: memoText,
         tags: tagWidget.getTags(),
         createdAt: new Date().toISOString(),
-        url: sourceUrlEl.dataset.url || ''
+        url: saveSourceUrlCheckbox.checked ? url || '' : ''
       };
 
       const memos = await getMemos();
@@ -947,8 +1128,9 @@ Or highlight text on any page first — it auto-populates here when you open Mem
       titleInput.value = '';
       textarea.value = '';
       tagWidget.clear();
-      sourceUrlEl.textContent = url;
-      sourceUrlEl.dataset.url = url;
+      sourceUrlToggleRow.hidden = !url;
+      saveSourceUrlCheckbox.checked = true;
+      refreshSourceUrlPreview();
       await refreshWandButton();
 
       savedConfirm.classList.add('visible');
@@ -1203,6 +1385,11 @@ Or highlight text on any page first — it auto-populates here when you open Mem
     folderSelect.className = 'filter-select send-popover-select';
     pop.appendChild(folderSelect);
 
+    const emptyDestinationHelper = document.createElement('p');
+    emptyDestinationHelper.className = 'send-popover-message';
+    emptyDestinationHelper.hidden = true;
+    pop.appendChild(emptyDestinationHelper);
+
     const collationSelect = document.createElement('select');
     collationSelect.className = 'filter-select send-popover-select send-popover-collation';
     MEMIO_COLLATION_OPTIONS.forEach(([value, label]) => {
@@ -1213,6 +1400,14 @@ Or highlight text on any page first — it auto-populates here when you open Mem
     });
     pop.appendChild(collationSelect);
 
+    // Declared before renderFolderAndCollation (which disables/enables it
+    // based on whether the selected instance has any destinations
+    // configured) since that function runs once immediately, below.
+    const sendBtn = document.createElement('button');
+    sendBtn.type = 'button';
+    sendBtn.className = 'btn-primary send-popover-confirm';
+    sendBtn.textContent = 'Send';
+
     let folderManuallyChanged = false;
     folderSelect.addEventListener('change', () => {
       folderManuallyChanged = true;
@@ -1221,9 +1416,41 @@ Or highlight text on any page first — it auto-populates here when you open Mem
     function renderFolderAndCollation() {
       const inst = availableInstances.find((i) => i.id === vaultSelect.value);
       const config = instanceConfig(inst);
+      const def = MEMIO_CONNECTOR_DEFS.find((d) => d.id === inst.typeId);
       const destinations = memioGetDestinationsForConnector(config, inst.typeId);
 
       folderSelect.innerHTML = '';
+
+      if (destinations.length === 0) {
+        const option = document.createElement('option');
+        option.textContent = `No ${def.destinationNounPlural} configured`;
+        folderSelect.appendChild(option);
+        folderSelect.disabled = true;
+        sendBtn.disabled = true;
+
+        emptyDestinationHelper.innerHTML = '';
+        emptyDestinationHelper.appendChild(document.createTextNode(`Add a ${def.destinationNoun} under `));
+        const link = document.createElement('a');
+        link.href = '#';
+        link.textContent = 'Settings → Configure';
+        link.addEventListener('click', async (e) => {
+          e.preventDefault();
+          pop.remove();
+          memioOpenSettingsOverlay();
+          await memioOpenConfigureDestinations(inst.typeId, inst.id);
+        });
+        emptyDestinationHelper.appendChild(link);
+        emptyDestinationHelper.appendChild(document.createTextNode(' first.'));
+        emptyDestinationHelper.hidden = false;
+
+        collationSelect.value = config.collation || 'individual';
+        return;
+      }
+
+      folderSelect.disabled = false;
+      sendBtn.disabled = false;
+      emptyDestinationHelper.hidden = true;
+
       destinations.forEach((d, i) => {
         const option = document.createElement('option');
         option.value = String(i);
@@ -1250,10 +1477,6 @@ Or highlight text on any page first — it auto-populates here when you open Mem
     vaultSelect.addEventListener('change', renderFolderAndCollation);
     renderFolderAndCollation();
 
-    const sendBtn = document.createElement('button');
-    sendBtn.type = 'button';
-    sendBtn.className = 'btn-primary send-popover-confirm';
-    sendBtn.textContent = 'Send';
     sendBtn.addEventListener('click', async () => {
       const inst = availableInstances.find((i) => i.id === vaultSelect.value);
       const config = instanceConfig(inst);
@@ -1696,6 +1919,11 @@ Or highlight text on any page first — it auto-populates here when you open Mem
     });
     donateOverlay.addEventListener('click', (e) => {
       if (memioEventTarget(e) === donateOverlay) donateOverlay.hidden = true;
+    });
+
+    const discordBtn = memioQ('discordBtn');
+    discordBtn.addEventListener('click', () => {
+      window.open('https://discord.gg/kcUnwUrXP', '_blank', 'noopener,noreferrer');
     });
 
     const helpBtn = memioQ('helpBtn');
@@ -2309,6 +2537,7 @@ Or highlight text on any page first — it auto-populates here when you open Mem
       return;
     }
     if (hostEl.hidden) {
+      if (refreshCapturedSelection) refreshCapturedSelection();
       showWindow();
     } else {
       hideWindow();
