@@ -1383,6 +1383,42 @@ a.btn-primary {
   cursor: pointer;
   margin-left: 4px;
 }
+.send-error-banner {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  width: max-content;
+  max-width: 240px;
+  padding: 8px 10px;
+  background: var(--status-error);
+  color: var(--status-error-text);
+  border-radius: var(--radius-md);
+  font-size: 12px;
+  font-family: 'DM Sans', sans-serif;
+  line-height: 1.4;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  z-index: 20;
+}
+.send-error-banner-text {
+  flex: 1;
+}
+.send-error-banner-close {
+  background: none;
+  border: none;
+  color: var(--status-error-text);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0;
+  opacity: 0.8;
+}
+.send-error-banner-close:hover {
+  opacity: 1;
+}
 
 /*
  * Nested inside .memio-window (which is position:fixed, establishing a

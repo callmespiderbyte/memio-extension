@@ -76,7 +76,7 @@ const MEMIO_CONNECTOR_DEFS = [
       'Make sure Obsidian is open when sending memos'
     ],
     note:
-      "Connecting a second vault? Each running vault's Local REST API server needs its own port — change it in that vault's plugin settings (default is 27123) and enter the matching port below, or both vaults will fight over the same port and one will fail to send.",
+      'Connecting a second vault? Each running vault\'s Local REST API server needs its own port, or they\'ll fight over the same one and one will fail to send. In that vault, open the plugin settings, expand "Advanced Settings", and change the port (e.g. 27124, 27125...) — then enter that same port below.',
     fields: [
       { key: 'apiKey', type: 'password', placeholder: 'API key' },
       { key: 'port', type: 'text', placeholder: 'Port (default 27123)' }

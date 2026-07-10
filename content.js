@@ -1311,6 +1311,35 @@ Or highlight text on any page first — it auto-populates here when you open Mem
     setTimeout(() => shadowRoot.addEventListener('click', handler, true), 50);
   }
 
+  // A failed send used to only explain itself via a hover tooltip, which is
+  // easy to miss entirely. This surfaces the real error (wrong port, bad
+  // key, missing folder, etc.) as a red banner right under the button —
+  // visible immediately, no hover required — with its own close button plus
+  // the same outside-click dismissal as the other popovers.
+  function showSendErrorBanner(wrap, message) {
+    const existing = wrap.querySelector('.send-error-banner');
+    if (existing) existing.remove();
+
+    const banner = document.createElement('div');
+    banner.className = 'send-error-banner';
+
+    const text = document.createElement('span');
+    text.className = 'send-error-banner-text';
+    text.textContent = message;
+    banner.appendChild(text);
+
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'send-error-banner-close';
+    closeBtn.setAttribute('aria-label', 'Dismiss');
+    closeBtn.textContent = '×';
+    closeBtn.addEventListener('click', () => banner.remove());
+    banner.appendChild(closeBtn);
+
+    wrap.appendChild(banner);
+    bindPopoverOutsideClose(wrap, banner);
+  }
+
   function showEmptyDestinationPopover(wrap, typeId, instanceId) {
     closeDestinationPopover(wrap);
     const pop = document.createElement('div');
@@ -1543,11 +1572,6 @@ Or highlight text on any page first — it auto-populates here when you open Mem
       } catch (err) {
         statusHost.innerHTML = '';
         statusHost.className = 'send-status failed';
-        // The generic "Failed" label stays as the visible text (there's no
-        // room in a memo card footer for a full error), but the real reason
-        // — e.g. which port/vault rejected the key — is available on hover
-        // instead of being discarded, so a "why" is always one hover away.
-        statusHost.title = err.message || '';
         statusHost.appendChild(document.createTextNode('Failed. '));
         const link = document.createElement('a');
         link.href = '#';
@@ -1558,6 +1582,7 @@ Or highlight text on any page first — it auto-populates here when you open Mem
           memioOpenSettingsOverlay();
         });
         statusHost.appendChild(link);
+        showSendErrorBanner(wrap, err.message || 'Something went wrong. Check your connector settings.');
       } finally {
         btn.disabled = false;
         btn.classList.remove('spinner');
