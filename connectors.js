@@ -73,18 +73,21 @@ const MEMIO_CONNECTOR_DEFS = [
       'In the plugin settings, turn on "Enable Non-encrypted (HTTP) Server" — it\'s off by default',
       'In the plugin settings, copy your API Key (paste just the key — no "Bearer " prefix)',
       'Paste it below',
-      'Make sure Obsidian is open when sending memos',
-      'Connecting more than one vault? Each additional vault needs its own port — in that vault\'s plugin settings, expand "Advanced Settings" and change the port to a new number (e.g. 27125, 27126, 27127...), then enter that same port below'
+      'Make sure Obsidian is open when sending memos'
     ],
     fields: [
+      { key: 'apiKey', type: 'password', placeholder: 'API key' },
       {
-        key: 'apiKey',
-        type: 'password',
-        placeholder: 'API key',
+        key: 'port',
+        type: 'text',
+        placeholder: 'Port (default 27123)',
+        // Only additional vaults (not the first/default one) need a
+        // non-standard port at all — hiding it there avoids implying
+        // everyone has to touch this.
+        hideIf: (instance) => instance.id.endsWith('_1'),
         hintAfter:
-          'Connecting more than one vault? Each additional vault needs its own port — open that vault\'s Local REST API plugin settings → Advanced Settings and set a new port (e.g. 27125, 27126, 27127...), then enter it below.'
-      },
-      { key: 'port', type: 'text', placeholder: 'Port (default 27123)' }
+          'This vault needs its own port so it doesn\'t collide with your default vault — open this vault\'s Local REST API plugin settings, expand "Advanced Settings", and set it to a new number (e.g. 27125, 27126, 27127...) matching what\'s entered above.'
+      }
     ],
     destinationsKey: 'folders',
     destinationNoun: 'folder',
@@ -1500,6 +1503,7 @@ function memioBuildConfigureRest(def, instance, container, toggleInput) {
 
   const fieldEls = {};
   def.fields.forEach((field) => {
+    if (field.hideIf && field.hideIf(instance)) return;
     const input = document.createElement('input');
     input.type = field.type;
     input.className = 'cred-input';
@@ -1544,6 +1548,7 @@ function memioBuildConfigureRest(def, instance, container, toggleInput) {
 
     const testConfig = { enabled: toggleInput.checked };
     def.fields.forEach((field) => {
+      if (!fieldEls[field.key]) return;
       testConfig[field.key] = fieldEls[field.key].value;
     });
     await memioPatchConnectorInstance(def.id, instance.id, testConfig);
