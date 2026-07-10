@@ -48,8 +48,88 @@ const MEMIO_ACCENTS = [
 ];
 
 const MEMIO_DEFAULT_ACCENT_NAME = 'yellow';
+const MEMIO_DEFAULT_CUSTOM_ACCENT = '#FFB93E';
 
-function applyAccentAndTheme(accentName, theme, colourMode) {
+// Every named accent above has its tokens hand-tuned directly in
+// styles.css (separate hex per light/dark, per hover/subtle/focus state —
+// see the design-tokens block at the top of that file). A user-picked
+// custom colour has no such stylesheet counterpart, so — unlike every
+// other accent — it genuinely needs hex math done in JS, computed once
+// per pick and applied as inline custom properties (which win over any
+// stylesheet rule, named-accent or otherwise, without needing !important).
+function memioHexToRgb(hex) {
+  const clean = (hex || '').replace('#', '');
+  const full = clean.length === 3 ? clean.split('').map((c) => c + c).join('') : clean;
+  const bigint = parseInt(full, 16) || 0;
+  return { r: (bigint >> 16) & 255, g: (bigint >> 8) & 255, b: bigint & 255 };
+}
+function memioRgbToHex(r, g, b) {
+  return (
+    '#' +
+    [r, g, b]
+      .map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0'))
+      .join('')
+  );
+}
+function memioMixWithBlack(hex, amount) {
+  const { r, g, b } = memioHexToRgb(hex);
+  return memioRgbToHex(r * (1 - amount), g * (1 - amount), b * (1 - amount));
+}
+function memioRelativeLuminance(hex) {
+  const { r, g, b } = memioHexToRgb(hex);
+  const srgb = [r, g, b].map((v) => {
+    const c = v / 255;
+    return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+  });
+  return 0.2126 * srgb[0] + 0.7152 * srgb[1] + 0.0722 * srgb[2];
+}
+function memioContrastRatio(l1, l2) {
+  const lighter = Math.max(l1, l2);
+  const darker = Math.min(l1, l2);
+  return (lighter + 0.05) / (darker + 0.05);
+}
+// WCAG-style: pick whichever of black/white text actually contrasts better
+// against the picked colour, rather than a fixed lightness cutoff — holds up
+// for saturated mid-tones (e.g. pure red) that a simple threshold misreads.
+function memioContrastTextColor(hex) {
+  const lum = memioRelativeLuminance(hex);
+  return memioContrastRatio(lum, 0) >= memioContrastRatio(lum, 1) ? '#1A1A1A' : '#FFFFFF';
+}
+
+// Sets/clears the inline custom-property overrides a custom accent needs.
+// Only [data-color-mode='background'] vs the default "accent" mode changes
+// which properties should carry the custom hue — see the comment above
+// styles.css's "Background colour mode" block: in background mode, accent/
+// text/border tokens are fixed neutrals for every accent (named or custom),
+// and only --bg-base carries the hue, so setting --accent inline there
+// would incorrectly fight that neutral treatment.
+function memioApplyCustomAccentVars(host, hex, colourMode) {
+  const isBackground = colourMode === 'background';
+  if (isBackground) {
+    host.style.setProperty('--bg-base', hex);
+    host.style.removeProperty('--accent');
+    host.style.removeProperty('--accent-hover');
+    host.style.removeProperty('--accent-subtle');
+    host.style.removeProperty('--accent-focus');
+    host.style.removeProperty('--accent-text');
+  } else {
+    host.style.removeProperty('--bg-base');
+    const { r, g, b } = memioHexToRgb(hex);
+    host.style.setProperty('--accent', hex);
+    host.style.setProperty('--accent-hover', memioMixWithBlack(hex, 0.12));
+    host.style.setProperty('--accent-subtle', `rgba(${r}, ${g}, ${b}, 0.12)`);
+    host.style.setProperty('--accent-focus', `rgba(${r}, ${g}, ${b}, 0.35)`);
+    host.style.setProperty('--accent-text', memioContrastTextColor(hex));
+  }
+}
+
+function memioClearCustomAccentVars(host) {
+  ['--bg-base', '--accent', '--accent-hover', '--accent-subtle', '--accent-focus', '--accent-text'].forEach((prop) =>
+    host.style.removeProperty(prop)
+  );
+}
+
+function applyAccentAndTheme(accentName, theme, colourMode, customAccentHex) {
   const host = memioHostRef;
   if (!host) return;
   host.dataset.accent = accentName;
@@ -62,6 +142,11 @@ function applyAccentAndTheme(accentName, theme, colourMode) {
     host.dataset.colorMode = 'background';
   } else {
     delete host.dataset.colorMode;
+  }
+  if (accentName === 'custom') {
+    memioApplyCustomAccentVars(host, customAccentHex || MEMIO_DEFAULT_CUSTOM_ACCENT, colourMode);
+  } else {
+    memioClearCustomAccentVars(host);
   }
 }
 
@@ -81,7 +166,11 @@ async function getStoredThemeSettings() {
     theme: (memio_settings && memio_settings.theme) || 'light',
     colourMode: (memio_settings && memio_settings.colourMode) || 'accent',
     edges: (memio_settings && memio_settings.edges) || 'soft',
-    autoSendOnSave: !!(memio_settings && memio_settings.autoSendOnSave)
+    autoSendOnSave: !!(memio_settings && memio_settings.autoSendOnSave),
+    // No fallback to MEMIO_DEFAULT_CUSTOM_ACCENT here on purpose — null
+    // means "never picked one," which the swatch UI uses to decide whether
+    // to show the rainbow "pick one" gradient or the actual last pick.
+    customAccentHex: (memio_settings && memio_settings.customAccentHex) || null
   };
 }
 
@@ -147,7 +236,7 @@ async function renderThemeToggle(themeHost) {
       async (value) => {
         await patchThemeSettings({ theme: value });
         const current = await getStoredThemeSettings();
-        applyAccentAndTheme(current.accentName, current.theme, current.colourMode);
+        applyAccentAndTheme(current.accentName, current.theme, current.colourMode, current.customAccentHex);
       }
     );
     return;
@@ -157,7 +246,7 @@ async function renderThemeToggle(themeHost) {
   if (theme !== forcedTheme) {
     await patchThemeSettings({ theme: forcedTheme });
     const current = await getStoredThemeSettings();
-    applyAccentAndTheme(current.accentName, current.theme, current.colourMode);
+    applyAccentAndTheme(current.accentName, current.theme, current.colourMode, current.customAccentHex);
   }
 
   memioBuildSegmentedControl(
@@ -170,15 +259,15 @@ async function renderThemeToggle(themeHost) {
     async (value) => {
       await patchThemeSettings({ theme: value });
       const current = await getStoredThemeSettings();
-      applyAccentAndTheme(current.accentName, current.theme, current.colourMode);
+      applyAccentAndTheme(current.accentName, current.theme, current.colourMode, current.customAccentHex);
     },
     [forcedTheme === 'dark' ? 'light' : 'dark']
   );
 }
 
 async function initSettingsPanel() {
-  const { accentName, theme, colourMode, edges, autoSendOnSave } = await getStoredThemeSettings();
-  applyAccentAndTheme(accentName, theme, colourMode);
+  const { accentName, theme, colourMode, edges, autoSendOnSave, customAccentHex } = await getStoredThemeSettings();
+  applyAccentAndTheme(accentName, theme, colourMode, customAccentHex);
   applyEdges(edges);
 
   const swatchContainer = memioQ('swatches');
@@ -213,7 +302,7 @@ async function initSettingsPanel() {
       btn.addEventListener('click', async () => {
         await patchThemeSettings({ accentName: a.name });
         const current = await getStoredThemeSettings();
-        applyAccentAndTheme(current.accentName, current.theme, current.colourMode);
+        applyAccentAndTheme(current.accentName, current.theme, current.colourMode, current.customAccentHex);
         Array.from(swatchContainer.querySelectorAll('.swatch')).forEach((c) => c.classList.remove('active'));
         btn.classList.add('active');
         // Background mode's forced Light/Dark pairing depends on which
@@ -229,6 +318,53 @@ async function initSettingsPanel() {
       item.appendChild(swatchLabel);
       swatchContainer.appendChild(item);
     });
+
+    // Custom accent — a colour input laid transparently over a decorative
+    // swatch button so clicking anywhere in the swatch opens the browser's
+    // native colour picker (a wheel/spectrum picker on most platforms)
+    // directly, no synthetic .click() forwarding needed.
+    const customItem = document.createElement('div');
+    customItem.className = 'swatch-item';
+
+    const customWrap = document.createElement('div');
+    customWrap.className = 'swatch-wrap';
+
+    const customSwatch = document.createElement('div');
+    customSwatch.className = 'swatch swatch-custom';
+    // Once a custom colour has been picked, show it (like every named
+    // swatch always shows its colour) rather than reverting to the "pick
+    // one" rainbow the moment a different accent becomes active.
+    if (customAccentHex) customSwatch.style.background = customAccentHex;
+    if (accentName === 'custom') customSwatch.classList.add('active');
+
+    const customInput = document.createElement('input');
+    customInput.type = 'color';
+    customInput.className = 'custom-accent-input';
+    customInput.value = customAccentHex || MEMIO_DEFAULT_CUSTOM_ACCENT;
+    customInput.setAttribute('aria-label', 'Custom accent colour');
+    customInput.addEventListener('input', async () => {
+      const hex = customInput.value;
+      customSwatch.style.background = hex;
+      await patchThemeSettings({ accentName: 'custom', customAccentHex: hex });
+      const current = await getStoredThemeSettings();
+      applyAccentAndTheme(current.accentName, current.theme, current.colourMode, current.customAccentHex);
+      Array.from(swatchContainer.querySelectorAll('.swatch')).forEach((c) => c.classList.remove('active'));
+      customSwatch.classList.add('active');
+      // Background mode's forced Light/Dark pairing depends on which
+      // accent is selected (see renderThemeToggle) — re-evaluate it.
+      await renderThemeToggle(themeHost);
+    });
+
+    customWrap.appendChild(customSwatch);
+    customWrap.appendChild(customInput);
+
+    const customLabel = document.createElement('span');
+    customLabel.className = 'swatch-label';
+    customLabel.textContent = 'Custom';
+
+    customItem.appendChild(customWrap);
+    customItem.appendChild(customLabel);
+    swatchContainer.appendChild(customItem);
   }
 
   await renderThemeToggle(themeHost);
@@ -243,7 +379,7 @@ async function initSettingsPanel() {
     async (value) => {
       await patchThemeSettings({ colourMode: value });
       const current = await getStoredThemeSettings();
-      applyAccentAndTheme(current.accentName, current.theme, current.colourMode);
+      applyAccentAndTheme(current.accentName, current.theme, current.colourMode, current.customAccentHex);
       // Switching into/out of Background mode changes whether Light/Dark/
       // System is a free choice or a forced pairing — re-evaluate it.
       await renderThemeToggle(themeHost);
