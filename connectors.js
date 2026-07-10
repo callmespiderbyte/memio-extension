@@ -616,7 +616,7 @@ async function memioPostToObsidianVault(folder, filename, apiKey, body, port) {
   }
   if (res.status === 401 || res.status === 403) {
     throw new Error(
-      `Obsidian on port ${port} rejected the API key. Double-check it was pasted without a "Bearer " prefix, and that the port matches this vault's Local REST API setting.`
+      `Wrong port or key for port ${port}. If you have more than one vault connected, this almost always means two vaults are sharing a port — open this vault's Local REST API plugin settings → Advanced Settings and check the port matches what's entered above. Otherwise, double-check the key was pasted without a "Bearer " prefix.`
     );
   }
   if (!res.ok) throw new Error(`Obsidian responded ${res.status}`);
@@ -1000,7 +1000,7 @@ const MEMIO_CONNECTOR_TESTS = {
     }
     if (res.status === 401 || res.status === 403) {
       throw new Error(
-        `Obsidian on port ${port} rejected the API key. Double-check it was pasted without a "Bearer " prefix, and that the port matches this vault's Local REST API setting.`
+        `Wrong port or key for port ${port}. If you have more than one vault connected, this almost always means two vaults are sharing a port — open this vault's Local REST API plugin settings → Advanced Settings and check the port matches what's entered above. Otherwise, double-check the key was pasted without a "Bearer " prefix.`
       );
     }
     if (!res.ok) throw new Error(`Obsidian responded ${res.status}`);

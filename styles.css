@@ -2362,10 +2362,13 @@ a.btn-primary {
 
 .connection-status-reason {
   font-size: 11px;
-  color: var(--text-muted);
   font-family: 'DM Sans', sans-serif;
-  margin: 0;
+  margin: 8px 0 0;
   line-height: 1.5;
+  padding: 8px 10px;
+  background: var(--status-error);
+  color: var(--status-error-text);
+  border-radius: var(--radius-md);
 }
 
 /*
