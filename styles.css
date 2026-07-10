@@ -49,6 +49,14 @@
      colours outside primitives" rule intact. */
   --status-success-text: #FFFFFF;
   --status-error-text: #FFFFFF;
+  /* Softer treatment for larger error explanation boxes (send failure
+     banner, Test Connection reason) — the solid --status-error/white-text
+     pairing above reads well for a small pill badge, but is heavy for a
+     multi-line paragraph, so these get a light red fill with a dark red
+     border and dark red text instead. */
+  --status-error-soft-bg: #FBE4E1;
+  --status-error-soft-border: #8B2E23;
+  --status-error-soft-text: #7A1F16;
   /* Used for the little on/off dot on each connector header. Defaults to
      --status-success (green), but when the accent itself is green that dot
      would blend into an all-green settings panel, so it's overridden below
@@ -1384,24 +1392,18 @@ a.btn-primary {
   margin-left: 4px;
 }
 .send-error-banner {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  margin-top: 4px;
   display: flex;
   align-items: flex-start;
   gap: 6px;
-  width: max-content;
-  max-width: 240px;
+  margin-top: 4px;
   padding: 8px 10px;
-  background: var(--status-error);
-  color: var(--status-error-text);
+  background: var(--status-error-soft-bg);
+  color: var(--status-error-soft-text);
+  border: 1px solid var(--status-error-soft-border);
   border-radius: var(--radius-md);
   font-size: 12px;
   font-family: 'DM Sans', sans-serif;
   line-height: 1.4;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
-  z-index: 20;
 }
 .send-error-banner-text {
   flex: 1;
@@ -1409,12 +1411,12 @@ a.btn-primary {
 .send-error-banner-close {
   background: none;
   border: none;
-  color: var(--status-error-text);
+  color: var(--status-error-soft-text);
   cursor: pointer;
   font-size: 14px;
   line-height: 1;
   padding: 0;
-  opacity: 0.8;
+  opacity: 0.7;
 }
 .send-error-banner-close:hover {
   opacity: 1;
@@ -2366,8 +2368,9 @@ a.btn-primary {
   margin: 8px 0 0;
   line-height: 1.5;
   padding: 8px 10px;
-  background: var(--status-error);
-  color: var(--status-error-text);
+  background: var(--status-error-soft-bg);
+  color: var(--status-error-soft-text);
+  border: 1px solid var(--status-error-soft-border);
   border-radius: var(--radius-md);
 }
 

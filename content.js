@@ -1313,11 +1313,13 @@ Or highlight text on any page first — it auto-populates here when you open Mem
 
   // A failed send used to only explain itself via a hover tooltip, which is
   // easy to miss entirely. This surfaces the real error (wrong port, bad
-  // key, missing folder, etc.) as a red banner right under the button —
-  // visible immediately, no hover required — with its own close button plus
-  // the same outside-click dismissal as the other popovers.
-  function showSendErrorBanner(wrap, message) {
-    const existing = wrap.querySelector('.send-error-banner');
+  // key, missing folder, etc.) as a red banner appended to the memo card
+  // itself — in normal document flow, not absolutely positioned, so it sits
+  // flush under the footer like the Configure panel's error box, rather
+  // than floating detached over whatever's below it. Visible immediately,
+  // no hover required, with its own close button.
+  function showSendErrorBanner(card, message) {
+    const existing = card.querySelector('.send-error-banner');
     if (existing) existing.remove();
 
     const banner = document.createElement('div');
@@ -1336,8 +1338,7 @@ Or highlight text on any page first — it auto-populates here when you open Mem
     closeBtn.addEventListener('click', () => banner.remove());
     banner.appendChild(closeBtn);
 
-    wrap.appendChild(banner);
-    bindPopoverOutsideClose(wrap, banner);
+    card.appendChild(banner);
   }
 
   function showEmptyDestinationPopover(wrap, typeId, instanceId) {
@@ -1528,7 +1529,7 @@ Or highlight text on any page first — it auto-populates here when you open Mem
     bindPopoverOutsideClose(wrap, pop);
   }
 
-  async function buildSendToControl(memo, statusHost) {
+  async function buildSendToControl(memo, statusHost, card) {
     const enabledInstances = await memioGetEnabledConnectors();
     if (enabledInstances.length === 0) return null;
 
@@ -1582,7 +1583,7 @@ Or highlight text on any page first — it auto-populates here when you open Mem
           memioOpenSettingsOverlay();
         });
         statusHost.appendChild(link);
-        showSendErrorBanner(wrap, err.message || 'Something went wrong. Check your connector settings.');
+        showSendErrorBanner(card, err.message || 'Something went wrong. Check your connector settings.');
       } finally {
         btn.disabled = false;
         btn.classList.remove('spinner');
@@ -1819,7 +1820,7 @@ Or highlight text on any page first — it auto-populates here when you open Mem
     const statusHost = document.createElement('span');
     statusHost.className = 'send-status';
 
-    buildSendToControl(memo, statusHost).then((control) => {
+    buildSendToControl(memo, statusHost, card).then((control) => {
       if (control) footer.insertBefore(control, footer.firstChild);
     });
 
