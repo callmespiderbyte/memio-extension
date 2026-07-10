@@ -2063,6 +2063,10 @@ Or highlight text on any page first — it auto-populates here when you open Mem
           a: 'Go to Settings → Connectors → Obsidian → Configure. Install the Local REST API community plugin in Obsidian, copy the API key it generates, and paste it into Memio. Obsidian must be open when sending memos.'
         },
         {
+          q: 'Can I connect more than one Obsidian vault?',
+          a: 'Yes, up to 5. But each running vault\'s Local REST API server needs its own port, or they\'ll fight over the same one and sends to every vault but one will fail. For each additional vault: open that vault\'s Local REST API plugin settings, expand "Advanced Settings", and change the port to a new number (e.g. 27125, 27126, 27127...). Then, under Settings → Connectors → that vault → Configure, enter the matching port in the Port field below the API key.'
+        },
+        {
           q: 'How do I connect Notion?',
           a: 'Go to Settings → Connectors → Notion → Configure. Create an integration at notion.so/my-integrations, copy the token, share your target database with the integration, then paste the database ID into Memio.'
         },

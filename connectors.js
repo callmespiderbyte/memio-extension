@@ -73,12 +73,17 @@ const MEMIO_CONNECTOR_DEFS = [
       'In the plugin settings, turn on "Enable Non-encrypted (HTTP) Server" — it\'s off by default',
       'In the plugin settings, copy your API Key (paste just the key — no "Bearer " prefix)',
       'Paste it below',
-      'Make sure Obsidian is open when sending memos'
+      'Make sure Obsidian is open when sending memos',
+      'Connecting more than one vault? Each additional vault needs its own port — in that vault\'s plugin settings, expand "Advanced Settings" and change the port to a new number (e.g. 27125, 27126, 27127...), then enter that same port below'
     ],
-    note:
-      'Connecting a second vault? Each running vault\'s Local REST API server needs its own port, or they\'ll fight over the same one and one will fail to send. In that vault, open the plugin settings, expand "Advanced Settings", and change the port (e.g. 27124, 27125...) — then enter that same port below.',
     fields: [
-      { key: 'apiKey', type: 'password', placeholder: 'API key' },
+      {
+        key: 'apiKey',
+        type: 'password',
+        placeholder: 'API key',
+        hintAfter:
+          'Connecting more than one vault? Each additional vault needs its own port — open that vault\'s Local REST API plugin settings → Advanced Settings and set a new port (e.g. 27125, 27126, 27127...), then enter it below.'
+      },
       { key: 'port', type: 'text', placeholder: 'Port (default 27123)' }
     ],
     destinationsKey: 'folders',
@@ -616,7 +621,7 @@ async function memioPostToObsidianVault(folder, filename, apiKey, body, port) {
   }
   if (res.status === 401 || res.status === 403) {
     throw new Error(
-      `Wrong port or key for port ${port}. If you have more than one vault connected, this almost always means two vaults are sharing a port — open this vault's Local REST API plugin settings → Advanced Settings and check the port matches what's entered above. Otherwise, double-check the key was pasted without a "Bearer " prefix.`
+      `Wrong port or key for port ${port}. If you have more than one vault connected, this almost always means two vaults are sharing a port — every additional vault needs its own (e.g. 27125, 27126, 27127...). Open this vault's Local REST API plugin settings → Advanced Settings and check the port matches what's entered above. Otherwise, double-check the key was pasted without a "Bearer " prefix.`
     );
   }
   if (!res.ok) throw new Error(`Obsidian responded ${res.status}`);
@@ -1000,7 +1005,7 @@ const MEMIO_CONNECTOR_TESTS = {
     }
     if (res.status === 401 || res.status === 403) {
       throw new Error(
-        `Wrong port or key for port ${port}. If you have more than one vault connected, this almost always means two vaults are sharing a port — open this vault's Local REST API plugin settings → Advanced Settings and check the port matches what's entered above. Otherwise, double-check the key was pasted without a "Bearer " prefix.`
+        `Wrong port or key for port ${port}. If you have more than one vault connected, this almost always means two vaults are sharing a port — every additional vault needs its own (e.g. 27125, 27126, 27127...). Open this vault's Local REST API plugin settings → Advanced Settings and check the port matches what's entered above. Otherwise, double-check the key was pasted without a "Bearer " prefix.`
       );
     }
     if (!res.ok) throw new Error(`Obsidian responded ${res.status}`);
@@ -1505,6 +1510,13 @@ function memioBuildConfigureRest(def, instance, container, toggleInput) {
     });
     fieldEls[field.key] = input;
     container.appendChild(input);
+
+    if (field.hintAfter) {
+      const hintEl = document.createElement('p');
+      hintEl.className = 'cred-hint';
+      hintEl.textContent = field.hintAfter;
+      container.appendChild(hintEl);
+    }
   });
 
   const actions = document.createElement('div');

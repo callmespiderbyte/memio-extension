@@ -2324,6 +2324,13 @@ a.btn-primary {
   font-size: 13px;
   padding: 8px;
 }
+.cred-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin: -4px 0 0;
+  line-height: 1.5;
+  font-family: 'DM Sans', sans-serif;
+}
 .cred-input:focus {
   outline: none;
   border-color: var(--accent);
