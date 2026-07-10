@@ -342,7 +342,20 @@ async function initSettingsPanel() {
     customInput.className = 'custom-accent-input';
     customInput.value = customAccentHex || MEMIO_DEFAULT_CUSTOM_ACCENT;
     customInput.setAttribute('aria-label', 'Custom accent colour');
-    customInput.addEventListener('input', async () => {
+    // "input" fires continuously while the picker is open — every pixel of
+    // wheel/slider drag, not just on release. Doing the full persist +
+    // rebuild on every tick flooded chrome.storage.sync's write quota and
+    // tore down/rebuilt the theme-toggle buttons out from under the user's
+    // cursor mid-drag, which is what made the panel seem to "get stuck" and
+    // stop responding to clicks. So: cheap, synchronous live preview on
+    // every "input" tick, and the actual persist + rebuild only on "change"
+    // (fires once, when a colour is committed).
+    customInput.addEventListener('input', () => {
+      const hex = customInput.value;
+      customSwatch.style.background = hex;
+      applyAccentAndTheme('custom', theme, colourMode, hex);
+    });
+    customInput.addEventListener('change', async () => {
       const hex = customInput.value;
       customSwatch.style.background = hex;
       await patchThemeSettings({ accentName: 'custom', customAccentHex: hex });
@@ -353,6 +366,16 @@ async function initSettingsPanel() {
       // Background mode's forced Light/Dark pairing depends on which
       // accent is selected (see renderThemeToggle) — re-evaluate it.
       await renderThemeToggle(themeHost);
+    });
+    // Safety net: if the picker is dismissed without committing (e.g. Esc),
+    // "change" never fires and the live preview from "input" above would
+    // otherwise be left showing a colour that was never actually saved —
+    // re-sync from what's actually in storage once the input loses focus.
+    customInput.addEventListener('blur', async () => {
+      const current = await getStoredThemeSettings();
+      applyAccentAndTheme(current.accentName, current.theme, current.colourMode, current.customAccentHex);
+      customInput.value = current.customAccentHex || MEMIO_DEFAULT_CUSTOM_ACCENT;
+      if (current.customAccentHex) customSwatch.style.background = current.customAccentHex;
     });
 
     customWrap.appendChild(customSwatch);
