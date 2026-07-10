@@ -2064,7 +2064,7 @@ Or highlight text on any page first — it auto-populates here when you open Mem
         },
         {
           q: 'Can I connect more than one Obsidian vault?',
-          a: 'Yes, up to 5. But each running vault\'s Local REST API server needs its own port, or they\'ll fight over the same one and sends to every vault but one will fail. For each additional vault: open that vault\'s Local REST API plugin settings, expand "Advanced Settings", and change the port to a new number (e.g. 27125, 27126, 27127...). Then, under Settings → Connectors → that vault → Configure, enter the matching port in the Port field below the API key.'
+          a: 'Yes, up to 5. But each running vault\'s Local REST API server needs its own port, or they\'ll fight over the same one and sends to every vault but one will fail. For each additional vault: open that vault\'s Local REST API plugin settings, expand "Advanced Settings", change the port to a new number (e.g. 27125, 27126, 27127...), and paste that new port into that vault\'s Port field under Settings → Connectors → that vault → Configure.'
         },
         {
           q: 'How do I connect Notion?',

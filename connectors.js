@@ -86,7 +86,7 @@ const MEMIO_CONNECTOR_DEFS = [
         // everyone has to touch this.
         hideIf: (instance) => instance.id.endsWith('_1'),
         hintAfter:
-          'This vault needs its own port so it doesn\'t collide with your default vault — open this vault\'s Local REST API plugin settings, expand "Advanced Settings", and set it to a new number (e.g. 27125, 27126, 27127...) matching what\'s entered above.'
+          'This vault needs its own port so it doesn\'t collide with your default vault — open this vault\'s Local REST API plugin settings, expand "Advanced Settings", set it to a new number (e.g. 27125, 27126, 27127...), and paste that new port above.'
       }
     ],
     destinationsKey: 'folders',
@@ -624,7 +624,7 @@ async function memioPostToObsidianVault(folder, filename, apiKey, body, port) {
   }
   if (res.status === 401 || res.status === 403) {
     throw new Error(
-      `Wrong port or key for port ${port}. If you have more than one vault connected, this almost always means two vaults are sharing a port — every additional vault needs its own (e.g. 27125, 27126, 27127...). Open this vault's Local REST API plugin settings → Advanced Settings and check the port matches what's entered above. Otherwise, double-check the key was pasted without a "Bearer " prefix.`
+      `Wrong port or key for port ${port}. If you have more than one vault connected, this almost always means two vaults are sharing a port — every additional vault needs its own (e.g. 27125, 27126, 27127...). Open this vault's Local REST API plugin settings → Advanced Settings, note the port, and paste it into that vault's Port field under Settings → Connectors → Configure. Otherwise, double-check the key was pasted without a "Bearer " prefix.`
     );
   }
   if (!res.ok) throw new Error(`Obsidian responded ${res.status}`);
@@ -1008,7 +1008,7 @@ const MEMIO_CONNECTOR_TESTS = {
     }
     if (res.status === 401 || res.status === 403) {
       throw new Error(
-        `Wrong port or key for port ${port}. If you have more than one vault connected, this almost always means two vaults are sharing a port — every additional vault needs its own (e.g. 27125, 27126, 27127...). Open this vault's Local REST API plugin settings → Advanced Settings and check the port matches what's entered above. Otherwise, double-check the key was pasted without a "Bearer " prefix.`
+        `Wrong port or key for port ${port}. If you have more than one vault connected, this almost always means two vaults are sharing a port — every additional vault needs its own (e.g. 27125, 27126, 27127...). Open this vault's Local REST API plugin settings → Advanced Settings and paste that new port above. Otherwise, double-check the key was pasted without a "Bearer " prefix.`
       );
     }
     if (!res.ok) throw new Error(`Obsidian responded ${res.status}`);
