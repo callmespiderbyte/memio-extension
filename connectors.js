@@ -984,7 +984,13 @@ const MEMIO_CONNECTOR_TESTS = {
     const port = memioNormalizeObsidianPort(config.port);
     let res;
     try {
-      res = await fetch(`http://localhost:${port}/`, {
+      // Deliberately NOT the root "/" endpoint — Obsidian's Local REST API
+      // answers that one unauthenticated (200 regardless of the API key),
+      // so it can't actually prove the key/port pair is valid; it only
+      // proves *some* server is listening on that port. "/vault/" requires
+      // a valid Bearer token and 401/403s on a mismatch, which is what a
+      // "Test connection" button needs to be checking.
+      res = await fetch(`http://localhost:${port}/vault/`, {
         headers: { Authorization: `Bearer ${apiKey}` }
       });
     } catch (networkErr) {
