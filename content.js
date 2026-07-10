@@ -1543,6 +1543,11 @@ Or highlight text on any page first — it auto-populates here when you open Mem
       } catch (err) {
         statusHost.innerHTML = '';
         statusHost.className = 'send-status failed';
+        // The generic "Failed" label stays as the visible text (there's no
+        // room in a memo card footer for a full error), but the real reason
+        // — e.g. which port/vault rejected the key — is available on hover
+        // instead of being discarded, so a "why" is always one hover away.
+        statusHost.title = err.message || '';
         statusHost.appendChild(document.createTextNode('Failed. '));
         const link = document.createElement('a');
         link.href = '#';

@@ -75,7 +75,12 @@ const MEMIO_CONNECTOR_DEFS = [
       'Paste it below',
       'Make sure Obsidian is open when sending memos'
     ],
-    fields: [{ key: 'apiKey', type: 'password', placeholder: 'API key' }],
+    note:
+      "Connecting a second vault? Each running vault's Local REST API server needs its own port — change it in that vault's plugin settings (default is 27123) and enter the matching port below, or both vaults will fight over the same port and one will fail to send.",
+    fields: [
+      { key: 'apiKey', type: 'password', placeholder: 'API key' },
+      { key: 'port', type: 'text', placeholder: 'Port (default 27123)' }
+    ],
     destinationsKey: 'folders',
     destinationNoun: 'folder',
     destinationNounPlural: 'folders',
@@ -569,9 +574,20 @@ function memioToObsidianTag(tag) {
   return tag.trim().replace(/\s+/g, '-');
 }
 
-async function memioObsidianFileExists(folder, filename, apiKey) {
+// Each running Obsidian vault's Local REST API server binds its own port
+// (default 27123) — with more than one vault instance configured, every
+// instance must resolve to the port its own vault is actually listening
+// on, or the send silently lands on (or authenticates against) a
+// different vault's server. See memioSendToObsidian for where this is
+// resolved from the instance's config.
+function memioNormalizeObsidianPort(rawPort) {
+  const trimmed = (rawPort || '').toString().trim();
+  return trimmed || '27123';
+}
+
+async function memioObsidianFileExists(folder, filename, apiKey, port) {
   try {
-    const res = await fetch(`http://localhost:27123/vault/${encodeURIComponent(folder)}/${encodeURIComponent(filename)}`, {
+    const res = await fetch(`http://localhost:${port}/vault/${encodeURIComponent(folder)}/${encodeURIComponent(filename)}`, {
       headers: { Authorization: `Bearer ${apiKey}` }
     });
     return res.ok;
@@ -582,10 +598,10 @@ async function memioObsidianFileExists(folder, filename, apiKey) {
   }
 }
 
-async function memioPostToObsidianVault(folder, filename, apiKey, body) {
+async function memioPostToObsidianVault(folder, filename, apiKey, body, port) {
   let res;
   try {
-    res = await fetch(`http://localhost:27123/vault/${encodeURIComponent(folder)}/${encodeURIComponent(filename)}`, {
+    res = await fetch(`http://localhost:${port}/vault/${encodeURIComponent(folder)}/${encodeURIComponent(filename)}`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -595,11 +611,13 @@ async function memioPostToObsidianVault(folder, filename, apiKey, body) {
     });
   } catch (networkErr) {
     throw new Error(
-      "Couldn't reach Obsidian on localhost:27123. Make sure Obsidian is open and the Local REST API plugin's Non-encrypted (HTTP) Server is enabled."
+      `Couldn't reach Obsidian on localhost:${port}. Make sure Obsidian is open and the Local REST API plugin's Non-encrypted (HTTP) Server is enabled.`
     );
   }
   if (res.status === 401 || res.status === 403) {
-    throw new Error('Obsidian rejected the API key. Double-check it was pasted without a "Bearer " prefix.');
+    throw new Error(
+      `Obsidian on port ${port} rejected the API key. Double-check it was pasted without a "Bearer " prefix, and that the port matches this vault's Local REST API setting.`
+    );
   }
   if (!res.ok) throw new Error(`Obsidian responded ${res.status}`);
 }
@@ -608,9 +626,9 @@ async function memioPostToObsidianVault(folder, filename, apiKey, body) {
 // note with that exact name already exists, this memo collates into it as
 // a new H2 section by design — same-titled memos are meant to share one
 // note — rather than creating a second file or overwriting the first.
-async function memioSendObsidianIndividual(memo, apiKey, folder) {
+async function memioSendObsidianIndividual(memo, apiKey, folder, port) {
   const filename = `${memioTitleToFilename(memo.title)}.md`;
-  const exists = await memioObsidianFileExists(folder, filename, apiKey);
+  const exists = await memioObsidianFileExists(folder, filename, apiKey, port);
 
   if (!exists) {
     // A bare comma-joined string ("tags: a, b") is valid YAML but parses as
@@ -619,16 +637,16 @@ async function memioSendObsidianIndividual(memo, apiKey, folder) {
     // what actually registers as separate tags.
     const obsidianTags = (memo.tags || []).map(memioToObsidianTag).filter(Boolean);
     const body = `---\ncreated: ${memo.createdAt}\ntags: [${obsidianTags.join(', ')}]\nsource: ${memo.url}\n---\n${memo.text}\n`;
-    await memioPostToObsidianVault(folder, filename, apiKey, body);
+    await memioPostToObsidianVault(folder, filename, apiKey, body, port);
     return;
   }
 
-  await memioPostToObsidianVault(folder, filename, apiKey, memioBuildObsidianAppendBlock(memo));
+  await memioPostToObsidianVault(folder, filename, apiKey, memioBuildObsidianAppendBlock(memo), port);
 }
 
-async function memioSendObsidianCollated(memo, apiKey, folder, period) {
+async function memioSendObsidianCollated(memo, apiKey, folder, period, port) {
   const filename = memioGetObsidianCollationFilename(period, memo);
-  const exists = await memioObsidianFileExists(folder, filename, apiKey);
+  const exists = await memioObsidianFileExists(folder, filename, apiKey, port);
 
   let body = '';
   if (!exists) {
@@ -637,12 +655,13 @@ async function memioSendObsidianCollated(memo, apiKey, folder, period) {
   }
   body += memioBuildObsidianAppendBlock(memo);
 
-  await memioPostToObsidianVault(folder, filename, apiKey, body);
+  await memioPostToObsidianVault(folder, filename, apiKey, body, port);
 }
 
 async function memioSendToObsidian(memo, config, context, destinationFolder) {
   const apiKey = memioNormalizeBearerToken(config.apiKey);
   if (!apiKey) throw new Error('Missing API key');
+  const port = memioNormalizeObsidianPort(config.port);
   // No silent fallback to a made-up folder name — Notion already requires a
   // real configured destination (throws "Missing credentials" with none),
   // and Obsidian needs the same guarantee. Falling back to a hardcoded
@@ -659,11 +678,11 @@ async function memioSendToObsidian(memo, config, context, destinationFolder) {
   // never written back to config.collation.
   const period = (context && context.collationOverride) || config.collation;
   if (period && period !== 'individual') {
-    await memioSendObsidianCollated(memo, apiKey, folder, period);
+    await memioSendObsidianCollated(memo, apiKey, folder, period, port);
     return;
   }
 
-  await memioSendObsidianIndividual(memo, apiKey, folder);
+  await memioSendObsidianIndividual(memo, apiKey, folder, port);
 }
 
 async function memioGetNotionSchema(databaseId, token) {
@@ -962,18 +981,21 @@ const MEMIO_CONNECTOR_TESTS = {
   obsidian: async (config) => {
     const apiKey = memioNormalizeBearerToken(config.apiKey);
     if (!apiKey) throw new Error('Missing API key');
+    const port = memioNormalizeObsidianPort(config.port);
     let res;
     try {
-      res = await fetch('http://localhost:27123/', {
+      res = await fetch(`http://localhost:${port}/`, {
         headers: { Authorization: `Bearer ${apiKey}` }
       });
     } catch (networkErr) {
       throw new Error(
-        "Couldn't reach Obsidian on localhost:27123. Make sure Obsidian is open and the Local REST API plugin's Non-encrypted (HTTP) Server is enabled."
+        `Couldn't reach Obsidian on localhost:${port}. Make sure Obsidian is open and the Local REST API plugin's Non-encrypted (HTTP) Server is enabled.`
       );
     }
     if (res.status === 401 || res.status === 403) {
-      throw new Error('Obsidian rejected the API key. Double-check it was pasted without a "Bearer " prefix.');
+      throw new Error(
+        `Obsidian on port ${port} rejected the API key. Double-check it was pasted without a "Bearer " prefix, and that the port matches this vault's Local REST API setting.`
+      );
     }
     if (!res.ok) throw new Error(`Obsidian responded ${res.status}`);
   },
