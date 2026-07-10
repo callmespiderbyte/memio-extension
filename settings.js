@@ -75,6 +75,63 @@ function memioMixWithBlack(hex, amount) {
   const { r, g, b } = memioHexToRgb(hex);
   return memioRgbToHex(r * (1 - amount), g * (1 - amount), b * (1 - amount));
 }
+// Used by the custom-colour editor's Hue/Saturation sliders — lightness is
+// fixed at 50% there (only two sliders, per the design), so this only ever
+// needs to go from (h, s, 50) to rgb, not the general case.
+function memioHslToRgb(h, s, l) {
+  const hh = ((h % 360) + 360) % 360 / 360;
+  const ss = s / 100;
+  const ll = l / 100;
+  if (ss === 0) {
+    const v = ll * 255;
+    return { r: v, g: v, b: v };
+  }
+  const q = ll < 0.5 ? ll * (1 + ss) : ll + ss - ll * ss;
+  const p = 2 * ll - q;
+  const hue2rgb = (t0) => {
+    let t = t0;
+    if (t < 0) t += 1;
+    if (t > 1) t -= 1;
+    if (t < 1 / 6) return p + (q - p) * 6 * t;
+    if (t < 1 / 2) return q;
+    if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+    return p;
+  };
+  return {
+    r: hue2rgb(hh + 1 / 3) * 255,
+    g: hue2rgb(hh) * 255,
+    b: hue2rgb(hh - 1 / 3) * 255
+  };
+}
+// Inverse of the above, used when the RGB fields are edited directly so the
+// Hue/Saturation sliders can be kept roughly in sync. Lightness is computed
+// but deliberately not fed back into a third slider (there isn't one) — the
+// sliders always operate at 50% lightness regardless of what an RGB edit's
+// actual lightness was, which is the accepted trade-off of only having two
+// sliders rather than a full 3-axis picker.
+function memioRgbToHueSat(r, g, b) {
+  const rr = r / 255;
+  const gg = g / 255;
+  const bb = b / 255;
+  const max = Math.max(rr, gg, bb);
+  const min = Math.min(rr, gg, bb);
+  const l = (max + min) / 2;
+  if (max === min) return { h: 0, s: 0 };
+  const d = max - min;
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let h;
+  switch (max) {
+    case rr:
+      h = (gg - bb) / d + (gg < bb ? 6 : 0);
+      break;
+    case gg:
+      h = (bb - rr) / d + 2;
+      break;
+    default:
+      h = (rr - gg) / d + 4;
+  }
+  return { h: (h / 6) * 360, s: s * 100 };
+}
 function memioRelativeLuminance(hex) {
   const { r, g, b } = memioHexToRgb(hex);
   const srgb = [r, g, b].map((v) => {
@@ -286,6 +343,8 @@ async function initSettingsPanel() {
     });
   }
 
+  const customColorEditor = memioQ('customColorEditor');
+
   if (swatchContainer) {
     swatchContainer.innerHTML = '';
     MEMIO_ACCENTS.forEach((a) => {
@@ -305,6 +364,7 @@ async function initSettingsPanel() {
         applyAccentAndTheme(current.accentName, current.theme, current.colourMode, current.customAccentHex);
         Array.from(swatchContainer.querySelectorAll('.swatch')).forEach((c) => c.classList.remove('active'));
         btn.classList.add('active');
+        if (customColorEditor) customColorEditor.hidden = true;
         // Background mode's forced Light/Dark pairing depends on which
         // accent is selected (see renderThemeToggle) — re-evaluate it.
         await renderThemeToggle(themeHost);
@@ -319,46 +379,141 @@ async function initSettingsPanel() {
       swatchContainer.appendChild(item);
     });
 
-    // Custom accent — a colour input laid transparently over a decorative
-    // swatch button so clicking anywhere in the swatch opens the browser's
-    // native colour picker (a wheel/spectrum picker on most platforms)
-    // directly, no synthetic .click() forwarding needed.
+    // Custom accent — a small in-panel picker (Hue + Saturation sliders,
+    // RGB fields) rather than the native <input type="color"> popup this
+    // used to be. That native picker turned out to have real bugs here on
+    // top of the input-flood issue already fixed once: dragging its wheel
+    // could flip the page's own light/dark theme mid-drag, and the swatch
+    // could end up permanently stuck after a few picks — behaviour that
+    // traces back into the OS-level picker/focus handling, outside
+    // anything this code actually controls. A picker built entirely from
+    // our own inputs sidesteps that whole class of bug, at the cost of the
+    // OS picker's eyedropper/palettes/wheel UI.
     const customItem = document.createElement('div');
     customItem.className = 'swatch-item';
 
-    const customWrap = document.createElement('div');
-    customWrap.className = 'swatch-wrap';
-
-    const customSwatch = document.createElement('div');
+    const customSwatch = document.createElement('button');
+    customSwatch.type = 'button';
     customSwatch.className = 'swatch swatch-custom';
+    customSwatch.title = 'Custom';
+    customSwatch.setAttribute('aria-label', 'Custom colour');
     // Once a custom colour has been picked, show it (like every named
     // swatch always shows its colour) rather than reverting to the "pick
     // one" rainbow the moment a different accent becomes active.
     if (customAccentHex) customSwatch.style.background = customAccentHex;
     if (accentName === 'custom') customSwatch.classList.add('active');
 
-    const customInput = document.createElement('input');
-    customInput.type = 'color';
-    customInput.className = 'custom-accent-input';
-    customInput.value = customAccentHex || MEMIO_DEFAULT_CUSTOM_ACCENT;
-    customInput.setAttribute('aria-label', 'Custom accent colour');
-    // "input" fires continuously while the picker is open — every pixel of
-    // wheel/slider drag, not just on release. Doing the full persist +
-    // rebuild on every tick flooded chrome.storage.sync's write quota and
-    // tore down/rebuilt the theme-toggle buttons out from under the user's
-    // cursor mid-drag, which is what made the panel seem to "get stuck" and
-    // stop responding to clicks. So: cheap, synchronous live preview on
-    // every "input" tick, and the actual persist + rebuild only on "change"
-    // (fires once, when a colour is committed).
-    customInput.addEventListener('input', () => {
-      const hex = customInput.value;
-      customSwatch.style.background = hex;
-      applyAccentAndTheme('custom', theme, colourMode, hex);
-    });
-    customInput.addEventListener('change', async () => {
-      const hex = customInput.value;
-      customSwatch.style.background = hex;
-      await patchThemeSettings({ accentName: 'custom', customAccentHex: hex });
+    const customLabel = document.createElement('span');
+    customLabel.className = 'swatch-label';
+    customLabel.textContent = 'Custom';
+
+    customItem.appendChild(customSwatch);
+    customItem.appendChild(customLabel);
+    swatchContainer.appendChild(customItem);
+
+    if (customColorEditor) {
+      customColorEditor.innerHTML = '';
+      customColorEditor.hidden = accentName !== 'custom';
+
+      const makeField = (groupClass, inputClass, labelText, type, min, max, value) => {
+        const group = document.createElement('div');
+        group.className = groupClass;
+        const label = document.createElement('label');
+        label.className = 'color-field-label';
+        label.textContent = labelText;
+        const input = document.createElement('input');
+        input.type = type;
+        input.min = String(min);
+        input.max = String(max);
+        input.value = String(Math.round(value));
+        input.className = inputClass;
+        group.appendChild(label);
+        group.appendChild(input);
+        return { group, input };
+      };
+
+      const startHex = customAccentHex || MEMIO_DEFAULT_CUSTOM_ACCENT;
+      const startRgb = memioHexToRgb(startHex);
+      const startHueSat = memioRgbToHueSat(startRgb.r, startRgb.g, startRgb.b);
+
+      const slidersRow = document.createElement('div');
+      slidersRow.className = 'color-sliders-row';
+      const hue = makeField('color-slider-group', 'color-slider hue-slider', 'Hue', 'range', 0, 360, startHueSat.h);
+      const sat = makeField('color-slider-group', 'color-slider sat-slider', 'Saturation', 'range', 0, 100, startHueSat.s);
+      slidersRow.appendChild(hue.group);
+      slidersRow.appendChild(sat.group);
+
+      const rgbRow = document.createElement('div');
+      rgbRow.className = 'color-rgb-row';
+      const rField = makeField('rgb-field-group', 'rgb-field', 'R', 'number', 0, 255, startRgb.r);
+      const gField = makeField('rgb-field-group', 'rgb-field', 'G', 'number', 0, 255, startRgb.g);
+      const bField = makeField('rgb-field-group', 'rgb-field', 'B', 'number', 0, 255, startRgb.b);
+      rgbRow.appendChild(rField.group);
+      rgbRow.appendChild(gField.group);
+      rgbRow.appendChild(bField.group);
+
+      customColorEditor.appendChild(slidersRow);
+      customColorEditor.appendChild(rgbRow);
+
+      // The saturation slider's track shows grey-to-full-colour at the
+      // *current* hue, so it visually previews what dragging it will do.
+      const updateSatTrack = () => {
+        sat.input.style.setProperty('--sat-track-end', `hsl(${hue.input.value}, 100%, 50%)`);
+      };
+      updateSatTrack();
+
+      // Cheap, synchronous preview on every drag/keystroke tick — no
+      // storage write, no DOM rebuild. See the block comment above for why
+      // that split matters (it's what the native picker got wrong).
+      const previewFromHueSat = () => {
+        const rgb = memioHslToRgb(Number(hue.input.value), Number(sat.input.value), 50);
+        rField.input.value = String(Math.round(rgb.r));
+        gField.input.value = String(Math.round(rgb.g));
+        bField.input.value = String(Math.round(rgb.b));
+        const hex = memioRgbToHex(rgb.r, rgb.g, rgb.b);
+        customSwatch.style.background = hex;
+        applyAccentAndTheme('custom', theme, colourMode, hex);
+        updateSatTrack();
+        return hex;
+      };
+      const previewFromRgbFields = () => {
+        const r = Math.max(0, Math.min(255, Number(rField.input.value) || 0));
+        const g = Math.max(0, Math.min(255, Number(gField.input.value) || 0));
+        const b = Math.max(0, Math.min(255, Number(bField.input.value) || 0));
+        const { h, s } = memioRgbToHueSat(r, g, b);
+        hue.input.value = String(Math.round(h));
+        sat.input.value = String(Math.round(s));
+        updateSatTrack();
+        const hex = memioRgbToHex(r, g, b);
+        customSwatch.style.background = hex;
+        applyAccentAndTheme('custom', theme, colourMode, hex);
+        return hex;
+      };
+      const commit = async (hex) => {
+        await patchThemeSettings({ accentName: 'custom', customAccentHex: hex });
+        const current = await getStoredThemeSettings();
+        applyAccentAndTheme(current.accentName, current.theme, current.colourMode, current.customAccentHex);
+        Array.from(swatchContainer.querySelectorAll('.swatch')).forEach((c) => c.classList.remove('active'));
+        customSwatch.classList.add('active');
+        // Background mode's forced Light/Dark pairing depends on which
+        // accent is selected (see renderThemeToggle) — re-evaluate it.
+        await renderThemeToggle(themeHost);
+      };
+
+      [hue.input, sat.input].forEach((input) => {
+        input.addEventListener('input', previewFromHueSat);
+        input.addEventListener('change', () => commit(previewFromHueSat()));
+      });
+      [rField.input, gField.input, bField.input].forEach((input) => {
+        input.addEventListener('input', previewFromRgbFields);
+        input.addEventListener('change', () => commit(previewFromRgbFields()));
+      });
+    }
+
+    customSwatch.addEventListener('click', async () => {
+      if (customColorEditor) customColorEditor.hidden = false;
+      if (customSwatch.classList.contains('active')) return;
+      await patchThemeSettings({ accentName: 'custom' });
       const current = await getStoredThemeSettings();
       applyAccentAndTheme(current.accentName, current.theme, current.colourMode, current.customAccentHex);
       Array.from(swatchContainer.querySelectorAll('.swatch')).forEach((c) => c.classList.remove('active'));
@@ -367,27 +522,6 @@ async function initSettingsPanel() {
       // accent is selected (see renderThemeToggle) — re-evaluate it.
       await renderThemeToggle(themeHost);
     });
-    // Safety net: if the picker is dismissed without committing (e.g. Esc),
-    // "change" never fires and the live preview from "input" above would
-    // otherwise be left showing a colour that was never actually saved —
-    // re-sync from what's actually in storage once the input loses focus.
-    customInput.addEventListener('blur', async () => {
-      const current = await getStoredThemeSettings();
-      applyAccentAndTheme(current.accentName, current.theme, current.colourMode, current.customAccentHex);
-      customInput.value = current.customAccentHex || MEMIO_DEFAULT_CUSTOM_ACCENT;
-      if (current.customAccentHex) customSwatch.style.background = current.customAccentHex;
-    });
-
-    customWrap.appendChild(customSwatch);
-    customWrap.appendChild(customInput);
-
-    const customLabel = document.createElement('span');
-    customLabel.className = 'swatch-label';
-    customLabel.textContent = 'Custom';
-
-    customItem.appendChild(customWrap);
-    customItem.appendChild(customLabel);
-    swatchContainer.appendChild(customItem);
   }
 
   await renderThemeToggle(themeHost);

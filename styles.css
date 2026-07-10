@@ -1735,29 +1735,111 @@ a.btn-primary {
   color: var(--text-muted);
   text-align: center;
 }
-.swatch-wrap {
-  position: relative;
-  width: 28px;
-  height: 28px;
-}
 .swatch-custom {
-  width: 100%;
-  height: 100%;
-  /* Rainbow ring signals "pick your own" before anything's chosen; once
-     picked, an inline background (set in JS) overrides this — inline
-     style always beats a stylesheet rule, so no extra class is needed. */
-  background: conic-gradient(from 180deg, #FF6B6B, #FFD93D, #6BCB77, #4D96FF, #9B5DE5, #FF6B6B);
+  /* Simple hue-spectrum gradient signals "pick your own" before anything's
+     chosen; once picked, an inline background (set in JS) overrides this —
+     inline style always beats a stylesheet rule, so no extra class needed. */
+  background: linear-gradient(to right, #FF0000, #FFFF00, #00FF00, #00FFFF, #0000FF, #FF00FF, #FF0000);
 }
-.custom-accent-input {
-  position: absolute;
-  inset: 0;
+
+/* Custom accent editor — Hue/Saturation sliders + RGB fields, shown under
+   the swatches only while the Custom swatch is the active accent. */
+.custom-color-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-subtle);
+}
+.color-sliders-row,
+.color-rgb-row {
+  display: flex;
+  gap: 8px;
+}
+.color-slider-group,
+.rgb-field-group {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.color-field-label {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.color-slider {
+  -webkit-appearance: none;
+  appearance: none;
   width: 100%;
-  height: 100%;
-  opacity: 0;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: transparent;
   cursor: pointer;
-  border: 0;
-  padding: 0;
-  background: none;
+}
+.color-slider::-webkit-slider-runnable-track {
+  height: 8px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-default);
+}
+.color-slider::-moz-range-track {
+  height: 8px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-default);
+}
+.hue-slider::-webkit-slider-runnable-track {
+  background: linear-gradient(to right, #FF0000, #FFFF00, #00FF00, #00FFFF, #0000FF, #FF00FF, #FF0000);
+}
+.hue-slider::-moz-range-track {
+  background: linear-gradient(to right, #FF0000, #FFFF00, #00FF00, #00FFFF, #0000FF, #FF00FF, #FF0000);
+}
+/* --sat-track-end is set in JS to the slider's current hue at full
+   saturation, so the track always previews what dragging it will do. */
+.sat-slider {
+  --sat-track-end: #FF0000;
+}
+.sat-slider::-webkit-slider-runnable-track {
+  background: linear-gradient(to right, #808080, var(--sat-track-end));
+}
+.sat-slider::-moz-range-track {
+  background: linear-gradient(to right, #808080, var(--sat-track-end));
+}
+.color-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  margin-top: -5px;
+  border-radius: var(--radius-icon);
+  background: #FFFFFF;
+  border: 2px solid var(--text-primary);
+  cursor: pointer;
+}
+.color-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: var(--radius-icon);
+  background: #FFFFFF;
+  border: 2px solid var(--text-primary);
+  cursor: pointer;
+}
+.rgb-field {
+  width: 100%;
+  background: var(--bg-base);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  padding: 6px;
+  min-width: 0;
+}
+.rgb-field:focus {
+  outline: none;
+  border-color: var(--accent);
 }
 
 .segmented-control {

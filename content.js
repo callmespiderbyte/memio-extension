@@ -393,6 +393,7 @@ Or highlight text on any page first — it auto-populates here when you open Mem
         <div class="theme-item">
           <p class="settings-label">Accent colour</p>
           <div class="swatches" id="swatches"></div>
+          <div class="custom-color-editor" id="customColorEditor" hidden></div>
         </div>
         <div class="theme-item">
           <p class="settings-label">Colour applies to</p>
