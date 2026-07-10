@@ -1752,6 +1752,14 @@ a.btn-primary {
   padding-top: 10px;
   border-top: 1px solid var(--border-subtle);
 }
+/* `.custom-color-editor { display: flex }` above and the browser's built-in
+   `[hidden] { display: none }` have identical specificity, and an author
+   stylesheet rule always wins that tie over the UA one regardless of source
+   order — so without this, setting .hidden = true in JS silently did
+   nothing and the editor stayed visible. */
+.custom-color-editor[hidden] {
+  display: none;
+}
 .color-sliders-row,
 .color-rgb-row {
   display: flex;
