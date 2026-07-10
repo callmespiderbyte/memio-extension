@@ -463,8 +463,21 @@ async function initSettingsPanel() {
       updateSatTrack();
 
       // Cheap, synchronous preview on every drag/keystroke tick — no
-      // storage write, no DOM rebuild. See the block comment above for why
-      // that split matters (it's what the native picker got wrong).
+      // storage write, no DOM rebuild, and (bug fixed here) no touching
+      // data-theme/data-accent either. This used to call the full
+      // applyAccentAndTheme('custom', theme, colourMode, hex) — but `theme`
+      // and `colourMode` were captured once when the Settings panel first
+      // opened, so if Light/Dark or "Colour applies to" had been changed
+      // since then, every drag tick briefly re-applied that stale snapshot
+      // (visibly flipping the theme) until "change" corrected it back on
+      // release. Dragging a colour slider never changes theme/colour-mode,
+      // so preview should only touch the accent CSS vars — reading colour
+      // mode live off the host's own dataset (always current, no async
+      // round-trip needed) instead of a snapshot that can go stale.
+      const previewCustomAccent = (hex) => {
+        const liveColourMode = memioHostRef.dataset.colorMode === 'background' ? 'background' : 'accent';
+        memioApplyCustomAccentVars(memioHostRef, hex, liveColourMode);
+      };
       const previewFromHueSat = () => {
         const rgb = memioHslToRgb(Number(hue.input.value), Number(sat.input.value), 50);
         rField.input.value = String(Math.round(rgb.r));
@@ -472,7 +485,7 @@ async function initSettingsPanel() {
         bField.input.value = String(Math.round(rgb.b));
         const hex = memioRgbToHex(rgb.r, rgb.g, rgb.b);
         customSwatch.style.background = hex;
-        applyAccentAndTheme('custom', theme, colourMode, hex);
+        previewCustomAccent(hex);
         updateSatTrack();
         return hex;
       };
@@ -486,7 +499,7 @@ async function initSettingsPanel() {
         updateSatTrack();
         const hex = memioRgbToHex(r, g, b);
         customSwatch.style.background = hex;
-        applyAccentAndTheme('custom', theme, colourMode, hex);
+        previewCustomAccent(hex);
         return hex;
       };
       const commit = async (hex) => {
