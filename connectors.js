@@ -1130,12 +1130,6 @@ async function memioTestAiConnection(config) {
   if (!reply) throw new Error('Empty response from AI provider');
 }
 
-function memioEscapeText(str) {
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
-}
-
 // Generic level-2 (nested) collapsible — CONFIGURE / FOLDERS-PAGES /
 // AUTO-ROUTING RULES inside each connector row. Same chevron/open-class
 // pattern as the level-1 connector header, just visually indented.
@@ -1147,7 +1141,13 @@ function memioBuildSubsection(labelText, defaultOpen) {
   header.type = 'button';
   header.className = 'connector-subheader';
   if (defaultOpen) header.classList.add('open');
-  header.innerHTML = `<span>${memioEscapeText(labelText)}</span><span class="connector-chevron">&#8250;</span>`;
+  const labelSpan = document.createElement('span');
+  labelSpan.textContent = labelText;
+  const chevronSpan = document.createElement('span');
+  chevronSpan.className = 'connector-chevron';
+  chevronSpan.textContent = '›';
+  header.appendChild(labelSpan);
+  header.appendChild(chevronSpan);
 
   const body = document.createElement('div');
   body.className = 'connector-subbody';
@@ -1711,7 +1711,21 @@ async function memioRenderConnectorSections() {
       const header = document.createElement('button');
       header.type = 'button';
       header.className = 'connector-header';
-      header.innerHTML = `<span class="connector-name">${memioEscapeText(def.name)}</span><span class="connector-header-right"><span class="connector-badge">Coming soon</span><span class="connector-chevron">&#8250;</span></span>`;
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'connector-name';
+      nameSpan.textContent = def.name;
+      const headerRight = document.createElement('span');
+      headerRight.className = 'connector-header-right';
+      const badge = document.createElement('span');
+      badge.className = 'connector-badge';
+      badge.textContent = 'Coming soon';
+      const chevronSpan = document.createElement('span');
+      chevronSpan.className = 'connector-chevron';
+      chevronSpan.textContent = '›';
+      headerRight.appendChild(badge);
+      headerRight.appendChild(chevronSpan);
+      header.appendChild(nameSpan);
+      header.appendChild(headerRight);
 
       const body = document.createElement('div');
       body.className = 'connector-body';
@@ -1909,13 +1923,48 @@ function memioBuildConnectorTypeIcon(typeId) {
   const wrap = document.createElement('span');
   wrap.className = 'connector-type-icon';
   wrap.setAttribute('aria-hidden', 'true');
-  wrap.innerHTML = `<svg class="icon-circle" viewBox="0 0 30 30" width="18" height="18" aria-hidden="true">
-    <mask id="${maskId}" maskUnits="userSpaceOnUse" x="0" y="0" width="30" height="30">
-      <rect width="30" height="30" fill="white"/>
-      <path fill="black" transform="translate(7,7) scale(0.667)" d="${path}"/>
-    </mask>
-    <rect x="0" y="0" width="30" height="30" class="icon-shape" fill="var(--text-muted)" mask="url(#${maskId})"/>
-  </svg>`;
+
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('class', 'icon-circle');
+  svg.setAttribute('viewBox', '0 0 30 30');
+  svg.setAttribute('width', '18');
+  svg.setAttribute('height', '18');
+  svg.setAttribute('aria-hidden', 'true');
+
+  const mask = document.createElementNS(SVG_NS, 'mask');
+  mask.setAttribute('id', maskId);
+  mask.setAttribute('maskUnits', 'userSpaceOnUse');
+  mask.setAttribute('x', '0');
+  mask.setAttribute('y', '0');
+  mask.setAttribute('width', '30');
+  mask.setAttribute('height', '30');
+
+  const maskBg = document.createElementNS(SVG_NS, 'rect');
+  maskBg.setAttribute('width', '30');
+  maskBg.setAttribute('height', '30');
+  maskBg.setAttribute('fill', 'white');
+
+  const maskPath = document.createElementNS(SVG_NS, 'path');
+  maskPath.setAttribute('fill', 'black');
+  maskPath.setAttribute('transform', 'translate(7,7) scale(0.667)');
+  maskPath.setAttribute('d', path);
+
+  mask.appendChild(maskBg);
+  mask.appendChild(maskPath);
+
+  const shape = document.createElementNS(SVG_NS, 'rect');
+  shape.setAttribute('x', '0');
+  shape.setAttribute('y', '0');
+  shape.setAttribute('width', '30');
+  shape.setAttribute('height', '30');
+  shape.setAttribute('class', 'icon-shape');
+  shape.setAttribute('fill', 'var(--text-muted)');
+  shape.setAttribute('mask', `url(#${maskId})`);
+
+  svg.appendChild(mask);
+  svg.appendChild(shape);
+  wrap.appendChild(svg);
   return wrap;
 }
 
@@ -2086,10 +2135,15 @@ async function memioRenderAiSection(container) {
 
   const header = document.createElement('div');
   header.className = 'connector-header connector-header-static';
-  header.innerHTML =
-    `<span class="connector-name"><span class="connector-status-dot" id="aiStatusDot" data-active="${!!ai.enabled}"></span>AI</span>`;
-
-  const aiStatusDot = header.querySelector('#aiStatusDot');
+  const nameSpan = document.createElement('span');
+  nameSpan.className = 'connector-name';
+  const aiStatusDot = document.createElement('span');
+  aiStatusDot.className = 'connector-status-dot';
+  aiStatusDot.id = 'aiStatusDot';
+  aiStatusDot.dataset.active = String(!!ai.enabled);
+  nameSpan.appendChild(aiStatusDot);
+  nameSpan.appendChild(document.createTextNode('AI'));
+  header.appendChild(nameSpan);
 
   const body = document.createElement('div');
   body.className = 'connector-body';

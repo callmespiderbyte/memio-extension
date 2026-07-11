@@ -2134,6 +2134,16 @@ Or highlight text on any page first — it auto-populates here when you open Mem
     return p;
   }
 
+  function memioFillChevronHeader(headerEl, labelText) {
+    const labelSpan = document.createElement('span');
+    labelSpan.textContent = labelText;
+    const chevronSpan = document.createElement('span');
+    chevronSpan.className = 'connector-chevron';
+    chevronSpan.textContent = '›';
+    headerEl.appendChild(labelSpan);
+    headerEl.appendChild(chevronSpan);
+  }
+
   function memioRenderHelpFaq(container) {
     container.innerHTML = '';
 
@@ -2148,7 +2158,7 @@ Or highlight text on any page first — it auto-populates here when you open Mem
       const sectionHeader = document.createElement('button');
       sectionHeader.type = 'button';
       sectionHeader.className = 'help-section-header';
-      sectionHeader.innerHTML = `<span>${memioEscapeText(section.label)}</span><span class="connector-chevron">&#8250;</span>`;
+      memioFillChevronHeader(sectionHeader, section.label);
 
       const sectionBody = document.createElement('div');
       sectionBody.className = 'help-section-body';
@@ -2176,7 +2186,7 @@ Or highlight text on any page first — it auto-populates here when you open Mem
         const qHeader = document.createElement('button');
         qHeader.type = 'button';
         qHeader.className = 'help-question-header';
-        qHeader.innerHTML = `<span>${memioEscapeText(item.q)}</span><span class="connector-chevron">&#8250;</span>`;
+        memioFillChevronHeader(qHeader, item.q);
 
         const qBody = document.createElement('div');
         qBody.className = 'help-question-body';
