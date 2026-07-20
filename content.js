@@ -2509,10 +2509,26 @@ Or highlight text on any page first — it auto-populates here when you open Mem
     // mouseup is deliberately excluded: the drag-to-reposition feature
     // below relies on a document-level mouseup listener to finalize a
     // drag, which would never fire if stopped here first.
+    //
+    // Same reasoning applies to keydown: plenty of sites (GitHub, YouTube,
+    // Reddit, Slack, Notion...) bind single-key shortcuts like "/" at the
+    // document level to jump focus to their own search box. Those listeners
+    // still see composed keydown events from inside our shadow tree, so
+    // typing "/" (or "s", "e", etc.) into any Memio input could get hijacked
+    // into triggering the host page's own shortcut instead of typing the
+    // character. Stopping propagation here is after the fact — any listener
+    // Memio itself attaches directly to an input (e.g. Enter-to-submit on
+    // the "Add folder" field) already fired by the time this runs, since
+    // that's lower in the tree than windowEl — so this only blocks the
+    // keystroke from continuing on to the host page, never Memio's own
+    // handling of it.
     const windowEl = memioQ('memioWindow');
     if (windowEl) {
       windowEl.addEventListener('click', (e) => e.stopPropagation());
       windowEl.addEventListener('mousedown', (e) => e.stopPropagation());
+      windowEl.addEventListener('keydown', (e) => e.stopPropagation());
+      windowEl.addEventListener('keyup', (e) => e.stopPropagation());
+      windowEl.addEventListener('keypress', (e) => e.stopPropagation());
     }
 
     memioQ('closeWindowBtn').addEventListener('click', hideWindow);
